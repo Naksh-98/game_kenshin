@@ -113,7 +113,7 @@ export default function DollEditor({ onSave, initialData, onDelete }) {
                 {/* Form Grid */}
                 <div className="grid grid-cols-2 gap-4">
                     <label>
-                        <span className={labelClass}>Hair Style</span>
+                        <span className={labelClass}>Hair Stylew</span>
                         <select
                             value={doll.hairStyle}
                             onChange={(e) => updateDoll('hairStyle', parseInt(e.target.value))}
