@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Doll from './Doll';
 
 export default function DollEditor({ onSave, initialData, onDelete }) {
-    const [doll, setDoll] = useState(initialData || {
+    const [doll, setDoll] = useState({
         id: Date.now(),
         hairColor: "#6d4c41",
         skinColor: "#f3d2c1",
@@ -12,7 +12,8 @@ export default function DollEditor({ onSave, initialData, onDelete }) {
         outfitStyle: 0,
         eyeType: 0,
         animationType: 'idle',
-        story: "Once upon a time..."
+        story: "Once upon a time...",
+        ...initialData // Merge provided data over defaults
     });
 
     const [transform, setTransform] = useState({
@@ -22,6 +23,21 @@ export default function DollEditor({ onSave, initialData, onDelete }) {
         skewX: Number(initialData?.transform?.skewX) || 0,
         skewY: Number(initialData?.transform?.skewY) || 0
     });
+
+    const [showHexInput, setShowHexInput] = useState(null); // 'skin' | 'hair' | 'outfit' | null
+
+    // Comprehensive safe color palette for mobile
+    const safeColors = [
+        '#ffadad', '#ff6b6b', '#ff4757', '#c0392b', // Reds
+        '#ffd6a5', '#fdcb6e', '#e17055', '#d35400', // Oranges
+        '#fdffb6', '#ffeaa7', '#f1c40f', '#f39c12', // Yellows
+        '#caffbf', '#55efc4', '#00b894', '#27ae60', // Greens
+        '#9bf6ff', '#74b9ff', '#0984e3', '#2980b9', // Blues
+        '#a0c4ff', '#a29bfe', '#6c5ce7', '#8e44ad', // Purples
+        '#ffc6ff', '#fd79a8', '#e84393', '#d63031', // Pinks
+        '#ffffff', '#dfe6e9', '#b2bec3', '#636e72', '#2d3436', '#000000', // Grays
+        '#f3d2c1', '#ffdbac', '#e0ac69', '#cd8c5e', '#b37142', '#8d5524', '#5e3a18', '#3c2314' // Skin/Hair
+    ];
 
     const [isMobile, setIsMobile] = useState(false);
 
@@ -50,6 +66,69 @@ export default function DollEditor({ onSave, initialData, onDelete }) {
 
     // Shared range slider classes — taller hit area
     const rangeClass = "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500 touch-manipulation";
+
+    const ColorSection = ({ label, field, presets }) => (
+        <div className="space-y-1.5">
+            <div className="flex justify-between items-center">
+                <span className={labelClass}>{label}</span>
+                <button
+                    onClick={() => setShowHexInput(showHexInput === field ? null : field)}
+                    className="text-[10px] items-center flex gap-1 text-rose-500 font-bold bg-rose-50 px-2 py-1 rounded-lg hover:bg-rose-100 transition-colors"
+                >
+                    {showHexInput === field ? 'Hide Colors' : 'More Colors 🎨'}
+                </button>
+            </div>
+
+            {/* Main Presets */}
+            <div className="flex flex-wrap gap-2">
+                {presets.map(c => (
+                    <button
+                        key={c}
+                        onClick={() => updateDoll(field, c)}
+                        className={`w-8 h-8 rounded-full border-2 transition-transform active:scale-95 ${doll[field] === c ? 'border-rose-500 scale-110 shadow-md ring-2 ring-rose-200' : 'border-gray-200 hover:scale-110'}`}
+                        style={{ backgroundColor: c }}
+                        title={c}
+                    />
+                ))}
+            </div>
+
+            {/* Expanded Palette */}
+            {showHexInput === field && (
+                <div className="mt-2 p-3 bg-gray-50 rounded-xl border border-gray-200 animate-fade-in">
+                    <div className="grid grid-cols-8 gap-1.5 mb-3">
+                        {safeColors.map(c => (
+                            <button
+                                key={c}
+                                onClick={() => updateDoll(field, c)}
+                                className={`w-6 h-6 rounded-full border border-gray-300 transition-transform hover:scale-125 ${doll[field] === c ? 'ring-2 ring-rose-400 ring-offset-1 z-10 scale-110' : ''}`}
+                                style={{ backgroundColor: c }}
+                            />
+                        ))}
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">Hex</span>
+                        <div className="flex-1 relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-sm">#</span>
+                            <input
+                                type="text"
+                                value={(doll[field] || '').replace('#', '')}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (/^[0-9A-Fa-f]*$/.test(val) && val.length <= 6) {
+                                        updateDoll(field, '#' + val);
+                                    }
+                                }}
+                                className="w-full pl-6 pr-2 py-1.5 rounded-lg border border-gray-300 text-sm font-mono focus:border-rose-500 focus:outline-none uppercase"
+                                placeholder="FF0000"
+                                maxLength={6}
+                            />
+                        </div>
+                        <div className="w-8 h-8 rounded-lg border-2 border-gray-200 shadow-sm" style={{ backgroundColor: doll[field] }} />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 
     return (
         <div
@@ -111,73 +190,78 @@ export default function DollEditor({ onSave, initialData, onDelete }) {
                 </div>
 
                 {/* Form Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                    <label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
                         <span className={labelClass}>Hair Style</span>
-                        <select
-                            value={doll.hairStyle}
-                            onChange={(e) => updateDoll('hairStyle', parseInt(e.target.value))}
-                            className={selectClass}
-                        >
-                            <option value={0}>Bob Cut</option>
-                            <option value={1}>Pigtails</option>
-                            <option value={2}>Spiky</option>
-                            <option value={3}>Long Wavy</option>
-                            <option value={4}>Bun</option>
-                            <option value={5}>Curly Afro</option>
-                        </select>
-                    </label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {['Bob', 'Pigtails', 'Spiky', 'Long', 'Bun', 'Afro', 'Mohawk', 'Side', 'Bald'].map((label, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => updateDoll('hairStyle', i)}
+                                    className={`px-1 py-2 rounded-lg text-[10px] font-bold border-2 transition-all touch-manipulation ${doll.hairStyle === i
+                                        ? 'bg-rose-500 text-white border-rose-500'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300'
+                                        }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
-                    <label>
+                    <div className="space-y-1.5">
                         <span className={labelClass}>Outfit Type</span>
-                        <select
-                            value={doll.outfitStyle}
-                            onChange={(e) => updateDoll('outfitStyle', parseInt(e.target.value))}
-                            className={selectClass}
-                        >
-                            <option value={0}>Basic Tee</option>
-                            <option value={1}>Dress</option>
-                            <option value={2}>Overalls</option>
-                            <option value={3}>Kimono/Robe</option>
-                            <option value={4}>Super Cape</option>
-                        </select>
-                    </label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {['Tee', 'Dress', 'Overalls', 'Kimono', 'Cape', 'Hoodie', 'Suit', 'Quest'].map((label, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => updateDoll('outfitStyle', i)}
+                                    className={`px-1 py-2 rounded-lg text-[10px] font-bold border-2 transition-all touch-manipulation ${doll.outfitStyle === i
+                                        ? 'bg-rose-500 text-white border-rose-500'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300'
+                                        }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
-                    <label>
+                    <div className="space-y-1.5">
                         <span className={labelClass}>Eye Style</span>
-                        <select
-                            value={doll.eyeType || 0}
-                            onChange={(e) => updateDoll('eyeType', parseInt(e.target.value))}
-                            className={selectClass}
-                        >
-                            <option value={0}>Dots</option>
-                            <option value={1}>Happy</option>
-                            <option value={2}>Sleepy</option>
-                            <option value={3}>Anime Shine</option>
-                            <option value={4}>Wink</option>
-                        </select>
-                    </label>
-
-                    <label>
-                        <span className={labelClass}>Skin Tone</span>
-                        <div className="h-[44px] w-full rounded-xl border-2 border-gray-300 overflow-hidden relative shadow-sm">
-                            <input type="color" value={doll.skinColor} onChange={(e) => updateDoll('skinColor', e.target.value)} className="absolute -top-4 -left-4 w-[200%] h-[200%] cursor-pointer p-0 border-0 touch-manipulation" />
+                        <div className="grid grid-cols-3 gap-2">
+                            {['Dots', 'Happy', 'Sleepy', 'Anime', 'Wink', 'OMG', 'Angry', 'Tears', 'Heart'].map((label, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => updateDoll('eyeType', i)}
+                                    className={`px-1 py-2 rounded-lg text-[10px] font-bold border-2 transition-all touch-manipulation ${doll.eyeType === i
+                                        ? 'bg-rose-500 text-white border-rose-500'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300'
+                                        }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
                         </div>
-                    </label>
+                    </div>
 
-                    <label>
-                        <span className={labelClass}>Hair Color</span>
-                        <div className="h-[44px] w-full rounded-xl border-2 border-gray-300 overflow-hidden relative shadow-sm">
-                            <input type="color" value={doll.hairColor} onChange={(e) => updateDoll('hairColor', e.target.value)} className="absolute -top-4 -left-4 w-[200%] h-[200%] cursor-pointer p-0 border-0 touch-manipulation" />
-                        </div>
-                    </label>
+                    <ColorSection
+                        label="Skin Tone"
+                        field="skinColor"
+                        presets={['#f3d2c1', '#ffdbac', '#e0ac69', '#c68642', '#8d5524', '#3c2314']}
+                    />
 
-                    <label>
-                        <span className={labelClass}>Outfit Color</span>
-                        <div className="h-[44px] w-full rounded-xl border-2 border-gray-300 overflow-hidden relative shadow-sm">
-                            <input type="color" value={doll.outfitColor} onChange={(e) => updateDoll('outfitColor', e.target.value)} className="absolute -top-4 -left-4 w-[200%] h-[200%] cursor-pointer p-0 border-0 touch-manipulation" />
-                        </div>
-                    </label>
+                    <ColorSection
+                        label="Hair Color"
+                        field="hairColor"
+                        presets={['#6d4c41', '#2c3e50', '#f1c40f', '#e74c3c', '#ecf0f1', '#e056fd']}
+                    />
+
+                    <ColorSection
+                        label="Outfit Color"
+                        field="outfitColor"
+                        presets={['#ff6b6b', '#54a0ff', '#1dd1a1', '#feca57', '#5f27cd', '#2c3e50']}
+                    />
                 </div>
 
                 {/* Transform Controls */}

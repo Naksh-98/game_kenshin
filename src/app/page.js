@@ -405,11 +405,11 @@ export default function Home() {
 
   // BGM — play selected song, no loop
   // BGM — play selected song, cycle to next on end
+  // BGM — play selected song, cycle to next on end
   const playSong = (songFile) => {
     // Stop current song if playing
     if (bgmRef.current) {
       bgmRef.current.pause();
-      // Remove previous listener to avoid duplicates if re-using instance (though we create new Audio each time)
       bgmRef.current.onended = null;
     }
 
@@ -422,18 +422,19 @@ export default function Home() {
 
     const audio = new Audio(songFile);
     audio.volume = isMuted ? 0 : 0.4;
-    audio.loop = false; // No loop, move to next
+    audio.loop = false;
     bgmRef.current = audio;
     setCurrentSong(songFile);
 
     // Play next song when ended
     audio.onended = () => {
       const currentIndex = songs.findIndex(s => s.file === songFile);
+      // Loop back to start if at end
       const nextIndex = (currentIndex + 1) % songs.length;
       playSong(songs[nextIndex].file);
     };
 
-    audio.play().catch(() => { });
+    audio.play().catch(err => console.error("Audio playback error:", err));
   };
 
   const toggleMute = () => {
@@ -549,7 +550,7 @@ export default function Home() {
 
 
       {/* Top Right Menu */}
-      <div ref={menuRef} className="fixed top-4 right-4 z-50 flex flex-col items-end z-[1000000000000]">
+      <div ref={menuRef} className="fixed top-4 right-4 z-50 flex flex-col items-end z-[1000]">
         <button
           onClick={() => setIsMenuOpen(!isMenuOpen)}
           className="w-10 h-10 bg-white/80 backdrop-blur-md border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-xl hover:bg-white transition-all text-gray-700 font-bold"
