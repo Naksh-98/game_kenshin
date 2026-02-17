@@ -42,6 +42,7 @@ export default function Home() {
   const menuRef = useRef(null);
   const [isMuted, setIsMuted] = useState(false);
   const [currentSong, setCurrentSong] = useState(null);
+  const [showDock, setShowDock] = useState(false);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
 
@@ -491,6 +492,21 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Dock Toggle Button */}
+      {showDock ? <button
+        onClick={() => setShowDock(!showDock)}
+        className="fixed bottom-[100px] right-6 z-[10000001] w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle"
+        title={showDock ? "Close Menu" : "Open Items"}
+      >
+        <span className="bottom-1">✖️</span>
+      </button> : <button
+        onClick={() => setShowDock(!showDock)}
+        className="fixed bottom-6 right-6 z-[10000001] w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle"
+        title={showDock ? "Close Menu" : "Open Items"}
+      >
+        <span className="text-blue-500">🎒</span>
+      </button>}
+
       {/* UI Overlay - Dock */}
       <div
         ref={dockRef}
@@ -501,7 +517,7 @@ export default function Home() {
         onTouchStart={handleDockTouchStart}
         onTouchMove={handleDockTouchMove}
         onTouchEnd={handleDockTouchEnd}
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-3 flex gap-2 z-[1000000] max-w-[95vw] overflow-x-auto bg-white/65 backdrop-blur-xl border border-white/50 rounded-2xl shadow-[0_4px_16px_0_rgba(31,38,135,0.15)] pointer-events-auto overscroll-x-contain scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent cursor-grab active:cursor-grabbing"
+        className={`absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-3 flex gap-2 z-[1000000] max-w-[95vw] overflow-x-auto bg-white/65 backdrop-blur-xl border border-white/50 rounded-2xl shadow-[0_4px_16px_0_rgba(31,38,135,0.15)] pointer-events-auto overscroll-x-contain scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent cursor-grab active:cursor-grabbing transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${showDock ? 'translate-y-0 opacity-100' : 'translate-y-[200%] opacity-0 pointer-events-none'}`}
       >
         <div className="flex gap-1.5 border-r border-gray-300 pr-2 items-center">
           <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_cottage')} title="Cottage">🏠</button>
@@ -711,6 +727,7 @@ export default function Home() {
 
             {editorType === 'object' && (
               <ObjectEditor
+                key={editorInitialData.id}
                 initialData={editorInitialData}
                 onSave={handleSaveEditor}
                 onDelete={handleDeleteItem}

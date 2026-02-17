@@ -3,14 +3,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getAsset } from './GameAssets';
 
 export default function ObjectEditor({ onSave, initialData, onClose, onDelete }) {
-    const [data, setData] = useState(initialData || {});
+    const [data, setData] = useState(initialData?.data || {});
 
     const [transform, setTransform] = useState({
-        rotate: Number(initialData?.transform?.rotate) || 0,
-        scaleX: Number(initialData?.transform?.scaleX) || 1,
-        scaleY: Number(initialData?.transform?.scaleY) || 1,
-        skewX: Number(initialData?.transform?.skewX) || 0,
-        skewY: Number(initialData?.transform?.skewY) || 0
+        rotate: Number(initialData?.data?.transform?.rotate) || 0,
+        scaleX: Number(initialData?.data?.transform?.scaleX) || 1,
+        scaleY: Number(initialData?.data?.transform?.scaleY) || 1,
+        skewX: Number(initialData?.data?.transform?.skewX) || 0,
+        skewY: Number(initialData?.data?.transform?.skewY) || 0
     });
 
     const [isMobile, setIsMobile] = useState(false);
@@ -68,7 +68,18 @@ export default function ObjectEditor({ onSave, initialData, onClose, onDelete })
 
                             <label className="block mb-3">
                                 <span className="text-xs font-bold text-blue-700 block mb-1">Fish Color</span>
-                                <div className="flex gap-2 flex-wrap">
+                                <div className="flex gap-2 flex-wrap items-center">
+                                    {/* Custom Color Picker */}
+                                    <label className="relative cursor-pointer w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-sm hover:scale-110 transition-transform">
+                                        <input
+                                            type="color"
+                                            value={data.fishColor || '#ff9f43'}
+                                            onChange={(e) => handleChange('fishColor', e.target.value)}
+                                            className="absolute inset-0 w-[150%] h-[150%] -top-1/4 -left-1/4 p-0 border-0 cursor-pointer"
+                                        />
+                                    </label>
+
+                                    {/* Presets */}
                                     {['#ff9f43', '#ff6b6b', '#54a0ff', '#feca57', '#48dbfb', '#1dd1a1'].map(c => (
                                         <button
                                             key={c}
@@ -81,7 +92,7 @@ export default function ObjectEditor({ onSave, initialData, onClose, onDelete })
                             </label>
 
                             <label className="block mb-4">
-                                <span className="text-xs font-bold text-blue-700 block mb-1">Fish Size: {data.fishScale || 1}x</span>
+                                <span className="text-xs font-bold text-blue-700 block mb-1">Fish Scale: {data.fishScale || 1}x</span>
                                 <input
                                     type="range" min="0.5" max="2" step="0.1"
                                     value={data.fishScale || 1}
@@ -92,22 +103,15 @@ export default function ObjectEditor({ onSave, initialData, onClose, onDelete })
 
                             <button
                                 onClick={() => {
-                                    if (onSave) {
-                                        // Pass specific flag or data to parent to handle "Add Fish"
-                                        // But the parent expects 'onSave' to update THIS object.
-                                        // We need a specific prop for 'onAddFish'. 
-                                        // Let's assume we pass a new prop 'onAddFish' to ObjectEditor.
-                                        const fishData = {
-                                            color: data.fishColor || '#ff9f43',
-                                            scale: data.fishScale || 1
-                                        };
-                                        // We'll need to update the component signature to accept onAddFish
-                                        initialData.onAddFish && initialData.onAddFish(fishData);
-                                    }
+                                    const fishData = {
+                                        color: data.fishColor || '#ff9f43',
+                                        scale: data.fishScale || 1
+                                    };
+                                    initialData.onAddFish && initialData.onAddFish(fishData);
                                 }}
-                                className="w-full py-2 rounded-lg bg-blue-500 text-white font-bold shadow-sm hover:bg-blue-600 active:scale-95 transition-all text-xs uppercase"
+                                className="w-full py-3 rounded-lg bg-blue-500 text-white font-bold shadow-md hover:bg-blue-600 active:scale-95 transition-all text-sm uppercase flex items-center justify-center gap-2"
                             >
-                                + Spawn Fish
+                                <span>+ Spawn Fish</span>
                             </button>
                         </div>
                     )}

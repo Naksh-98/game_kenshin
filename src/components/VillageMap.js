@@ -14,6 +14,7 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
     // Ref for synchronous touch tracking (Fixes mobile tap issues)
     const interactionData = useRef({ startX: 0, startY: 0, itemId: null });
     const backgroundDrag = useRef({ startX: 0, startScrollLeft: 0 });
+    const lastTouchTime = useRef(0);
 
     const [selectedIds, setSelectedIds] = useState([]);
 
@@ -42,35 +43,70 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
 
                         const fishState = item.fish || { dx: (Math.random() - 0.5) * 1, dy: (Math.random() - 0.5) * 0.5 };
 
+                        // Dimensions map
+                        const dims = {
+                            pond: { w: 120, h: 100 },
+                            river_h: { w: 100, h: 60 },
+                            river_v: { w: 60, h: 100 }
+                        };
+
+                        // Helper to get bounds
+                        const getBounds = (wItem) => {
+                            if (!dims[wItem.type]) return null;
+                            const d = dims[wItem.type];
+                            const sX = wItem.data?.transform?.scaleX || 1;
+                            const sY = wItem.data?.transform?.scaleY || 1;
+
+                            // Center of the item
+                            const cx = wItem.x + d.w / 2;
+                            const cy = wItem.y + d.h / 2;
+
+                            // Scaled half-sizes
+                            const halfW = (d.w * Math.abs(sX)) / 2;
+                            const halfH = (d.h * Math.abs(sY)) / 2;
+
+                            return {
+                                minX: cx - halfW,
+                                maxX: cx + halfW,
+                                minY: cy - halfH,
+                                maxY: cy + halfH
+                            };
+                        };
+
                         // Find container water item (must be fully overlapping or close)
-                        const water = prevItems.find(w =>
-                            ['pond', 'river_h', 'river_v'].includes(w.type) &&
-                            item.x > w.x - 20 && item.x < w.x + (w.type === 'river_h' ? 100 : (w.type === 'river_v' ? 60 : 120)) + 20 &&
-                            item.y > w.y - 20 && item.y < w.y + (w.type === 'river_h' ? 60 : (w.type === 'river_v' ? 100 : 100)) + 20
-                        );
+                        const water = prevItems.find(w => {
+                            if (!['pond', 'river_h', 'river_v'].includes(w.type)) return false;
+                            const b = getBounds(w);
+                            // Relaxed bounds for "finding" the water (add margin)
+                            const margin = 20;
+                            return item.x > b.minX - margin && item.x < b.maxX + margin &&
+                                item.y > b.minY - margin && item.y < b.maxY + margin;
+                        });
 
                         if (!water) {
                             // Not in water? Stop moving.
                             return item;
                         }
 
-                        // Bounds
-                        let w = 120; let h = 100; // Pond defaults
-                        if (water.type === 'river_h') { w = 100; h = 60; }
-                        if (water.type === 'river_v') { w = 60; h = 100; }
+                        const b = getBounds(water);
 
                         let newX = item.x + fishState.dx;
                         let newY = item.y + fishState.dy;
 
                         // Bounce logic
                         const padding = 10;
-                        if (newX < water.x + padding || newX > water.x + w - 20) {
+                        const minX = b.minX + padding;
+                        const maxX = b.maxX - padding;
+                        const minY = b.minY + padding;
+                        const maxY = b.maxY - padding;
+
+                        if (newX < minX || newX > maxX) {
                             fishState.dx = -fishState.dx;
-                            newX = Math.max(water.x + padding, Math.min(water.x + w - 20, newX));
+                            newX = Math.max(minX, Math.min(maxX, newX));
                         }
-                        if (newY < water.y + padding || newY > water.y + h - 10) {
+                        if (newY < minY || newY > maxY) {
                             fishState.dy = -fishState.dy;
-                            newY = Math.max(water.y + padding, Math.min(water.y + h - 10, newY));
+                            newY = Math.max(minY, Math.min(maxY, newY));
                         }
 
                         // Randomly change direction slightly
@@ -82,9 +118,38 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
                             fishState.dy = Math.max(-0.5, Math.min(0.5, fishState.dy));
                         }
 
-                        // Flip sprite based on direction (assuming fish sprite faces left by default or right? Test)
+                        // Flip sprite based on direction
                         const scaleX = fishState.dx > 0 ? -1 : 1;
-                        const newData = { ...item.data, transform: { ...item.data?.transform, scaleX } };
+                        // Preserve existing user scale if any (multiply?) - Usually fish scale is set in data.transform.scaleX/Y
+                        // But wait! data.transform.scaleX is used for "Fish Size" slider.
+                        // We need to Apply the "flip" on top of the size.
+                        // The asset renderer uses `transform: scale(...)`.
+                        // If we set scaleX to -1, we override the user's size (e.g. 1.5).
+                        // We should read the "user scale" from the fish data if we stored it separately?
+                        // Actually, in ObjectEditor we save `scaleX`/`scaleY` into `data.transform`.
+                        // We need to know the "base" size (from slider) vs "direction" flip.
+                        // For now, let's assume `data.transform.scaleX` is absolute size, and we check its sign?
+                        // A simpler way: The Fish Asset accepts a `scale` prop (from our earlier edit).
+                        // Let's check GameAssets.js... It uses `scale` prop.
+                        // But `VillageMap` renders with `transform: scale(...)` based on `item.data.transform`.
+                        // This double-scaling might be tricky.
+
+                        // Let's look at VillageMap render:
+                        // scale(${item.data?.transform?.scaleX || 1}, ${item.data?.transform?.scaleY || 1})
+
+                        // If we want to FLIP it, we must negate `scaleX`.
+                        // But we want to preserve the magnitude (size).
+
+                        const currentScaleX = Math.abs(item.data?.transform?.scaleX || 1);
+                        const newScaleX = fishState.dx > 0 ? -currentScaleX : currentScaleX;
+
+                        const newData = {
+                            ...item.data,
+                            transform: {
+                                ...item.data?.transform,
+                                scaleX: newScaleX
+                            }
+                        };
 
                         specificUpdates = true;
                         return { ...item, x: newX, y: newY, fish: fishState, data: newData };
@@ -263,6 +328,13 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
     const handleMouseDown = (e, id, x, y) => {
         e.stopPropagation();
 
+        // Mobile Fix: Prevent double-firing (touch followed by simulated mouse click)
+        if (e.type === 'touchstart') {
+            lastTouchTime.current = Date.now();
+        } else if (e.type === 'mousedown') {
+            if (Date.now() - lastTouchTime.current < 500) return;
+        }
+
         if (isSelectionMode) {
             // Toggle selection
             if (selectedIds.includes(id)) {
@@ -341,7 +413,7 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
                         if (newY < groundY) newY = groundY;
                     }
                     // Prevent dragging into dock area (bottom 100px)
-                    const maxY = window.innerHeight - 180;
+                    const maxY = window.innerHeight - 50;
                     if (newY > maxY) newY = maxY;
                     return { ...item, x: newX, y: newY };
                 }
@@ -359,7 +431,7 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
                     if (newY < groundY) newY = groundY;
                 }
                 // Prevent dragging into dock area (bottom 100px)
-                const maxY = window.innerHeight - 180;
+                const maxY = window.innerHeight - 50;
                 if (newY > maxY) newY = maxY;
 
                 setItems(prev => prev.map(item =>
