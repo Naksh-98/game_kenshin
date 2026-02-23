@@ -471,12 +471,12 @@ export default function Home() {
   }
 
   return (
-    <div className="w-screen h-screen relative overflow-hidden touch-none overscroll-none">
+    <div className="w-screen h-[100dvh] relative overflow-hidden touch-none overscroll-none">
 
       {/* Scrollable world container */}
       <div
         ref={scrollContainerRef}
-        className="w-screen h-screen overflow-hidden touch-none overscroll-none outline-none"
+        className="w-screen h-[100dvh] overflow-hidden touch-none overscroll-none outline-none"
         style={{ scrollbarWidth: 'none' }}
       >
         {/* Wide world content */}
@@ -510,13 +510,13 @@ export default function Home() {
       {/* Dock Toggle Button */}
       {showDock ? <button
         onClick={() => setShowDock(!showDock)}
-        className="fixed bottom-[100px] right-6 z-[10000001] w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle"
+        className="fixed bottom-[max(100px,calc(100px+env(safe-area-inset-bottom)))] right-6 z-[10000001] w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle"
         title={showDock ? "Close Menu" : "Open Items"}
       >
         <span className="bottom-1">✖️</span>
       </button> : <button
         onClick={() => setShowDock(!showDock)}
-        className="fixed bottom-6 right-6 z-[10000001] w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle"
+        className="fixed bottom-[max(24px,calc(24px+env(safe-area-inset-bottom)))] right-6 z-[10000001] w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle"
         title={showDock ? "Close Menu" : "Open Items"}
       >
         <span className="text-blue-500">🎒</span>
@@ -524,7 +524,7 @@ export default function Home() {
 
       {/* UI Overlay - Dock */}
       <div
-        className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000000] w-[95vw] md:w-[80vw] bg-white/65 backdrop-blur-xl border border-white/50 rounded-2xl shadow-[0_4px_16px_0_rgba(31,38,135,0.15)] pointer-events-auto transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${showDock ? 'translate-y-0 opacity-100' : 'translate-y-[200%] opacity-0 pointer-events-none'}`}
+        className={`absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 -translate-x-1/2 z-[1000000] w-[95vw] md:w-[80vw] bg-white/65 backdrop-blur-xl border border-white/50 rounded-2xl shadow-[0_4px_16px_0_rgba(31,38,135,0.15)] pointer-events-auto transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${showDock ? 'translate-y-0 opacity-100' : 'translate-y-[200%] opacity-0 pointer-events-none'}`}
       >
         <div
           ref={dockRef}
@@ -761,8 +761,8 @@ export default function Home() {
 
       {/* Editor Modal */}
       {editingId && editorInitialData && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[20000] flex items-center justify-center">
-          <div className="animate-pop relative">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000005] flex items-center justify-center p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-hidden touch-none h-[100dvh] max-h-[100dvh] w-screen">
+          <div className="animate-pop relative w-full h-full max-w-[700px] md:h-auto md:w-auto flex flex-col items-center justify-center max-h-full">
             <button
               className="absolute -top-4 -right-4 z-10 w-12 h-12 flex items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation"
               onClick={() => { setEditingId(null); setEditorType(null); }}

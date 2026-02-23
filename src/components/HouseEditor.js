@@ -73,7 +73,7 @@ export default function HouseEditor({ onSave, initialData, onClose, onDelete }) 
 
     return (
         <div
-            className="w-full max-w-[550px] md:mx-auto flex flex-col items-center relative rounded-2xl shadow-2xl bg-white backdrop-blur-xl max-h-[90vh] overflow-hidden"
+            className="w-full h-full max-h-full max-w-[550px] md:mx-auto flex flex-col items-center relative rounded-2xl shadow-2xl bg-white backdrop-blur-xl overflow-hidden"
             style={{ touchAction: 'pan-y' }}
         >
             <div ref={wrapperRef} className="flex-1 w-full overflow-hidden relative">

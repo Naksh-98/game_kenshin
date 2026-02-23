@@ -71,7 +71,7 @@ export default function ObjectEditor({ onSave, initialData, onClose, onDelete })
 
     return (
         <div
-            className="w-full md:w-[700px] max-h-[85vh] flex flex-col-reverse md:flex-row overflow-hidden rounded-2xl shadow-2xl bg-white backdrop-blur-xl"
+            className="w-full md:w-[700px] h-full max-h-full flex flex-col-reverse md:flex-row overflow-hidden rounded-2xl shadow-2xl bg-white backdrop-blur-xl"
             style={{ touchAction: 'pan-y' }}
         >
 

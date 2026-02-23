@@ -161,7 +161,7 @@ export default function DollEditor({ onSave, initialData, onDelete }) {
 
     return (
         <div
-            className="w-full md:w-[700px] max-h-[90vh] md:mx-auto flex flex-col md:flex-row overflow-hidden shadow-2xl rounded-2xl bg-white backdrop-blur-xl"
+            className="w-full md:w-[700px] h-full max-h-full md:mx-auto flex flex-col md:flex-row overflow-hidden shadow-2xl rounded-2xl bg-white backdrop-blur-xl"
             style={{ touchAction: 'pan-y' }} // Allow vertical scroll, prevent unwanted gestures
         >
             {/* Preview Section (Top on mobile) */}
