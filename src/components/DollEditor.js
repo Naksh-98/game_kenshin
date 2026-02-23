@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import BScroll from 'better-scroll';
 import Doll from './Doll';
 
 export default function DollEditor({ onSave, initialData, onDelete }) {
@@ -13,15 +14,15 @@ export default function DollEditor({ onSave, initialData, onDelete }) {
         eyeType: 0,
         animationType: 'idle',
         story: "Once upon a time...",
-        ...initialData // Merge provided data over defaults
+        ...(initialData?.data || {}) // Merge provided data over defaults
     });
 
     const [transform, setTransform] = useState({
-        rotate: Number(initialData?.transform?.rotate) || 0,
-        scaleX: Number(initialData?.transform?.scaleX) || 1,
-        scaleY: Number(initialData?.transform?.scaleY) || 1,
-        skewX: Number(initialData?.transform?.skewX) || 0,
-        skewY: Number(initialData?.transform?.skewY) || 0
+        rotate: Number(initialData?.data?.transform?.rotate) || 0,
+        scaleX: Number(initialData?.data?.transform?.scaleX) || 1,
+        scaleY: Number(initialData?.data?.transform?.scaleY) || 1,
+        skewX: Number(initialData?.data?.transform?.skewX) || 0,
+        skewY: Number(initialData?.data?.transform?.skewY) || 0
     });
 
     const [showHexInput, setShowHexInput] = useState(null); // 'skin' | 'hair' | 'outfit' | null
@@ -47,6 +48,34 @@ export default function DollEditor({ onSave, initialData, onDelete }) {
         check();
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
+    }, []);
+
+    const wrapperRef = useRef(null);
+    useEffect(() => {
+        if (!wrapperRef.current) return;
+        const bs = new BScroll(wrapperRef.current, {
+            scrollY: true,
+            click: true,
+            bounce: true,
+            mouseWheel: true,
+            scrollbar: true,
+            preventDefaultException: { tagName: /^(INPUT|TEXTAREA|BUTTON|SELECT|TEXTAREA)$/ }
+        });
+
+        const stopProp = (e) => {
+            if (e.target.tagName === 'INPUT' && e.target.type === 'range') {
+                e.stopPropagation();
+            }
+        };
+        const el = wrapperRef.current;
+        el.addEventListener('touchstart', stopProp, { capture: true, passive: false });
+        el.addEventListener('touchmove', stopProp, { capture: true, passive: false });
+
+        return () => {
+            el.removeEventListener('touchstart', stopProp, { capture: true });
+            el.removeEventListener('touchmove', stopProp, { capture: true });
+            bs.destroy();
+        };
     }, []);
 
     const updateDoll = useCallback((key, value) => {
@@ -176,150 +205,153 @@ export default function DollEditor({ onSave, initialData, onDelete }) {
             </div>
 
             {/* Controls Section */}
-            <div className="flex-1 flex flex-col gap-4 overflow-y-auto p-4 md:p-6 bg-white overscroll-contain">
-
-                {/* Header with Delete */}
-                <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-gray-900">Customize</h2>
-                    <button
-                        onClick={onDelete}
-                        className="bg-red-500 text-white rounded-xl px-4 min-h-[40px] text-sm font-bold shadow-md hover:bg-red-600 active:bg-red-700 transition-colors touch-manipulation"
-                    >
-                        Delete
-                    </button>
-                </div>
-
-                {/* Form Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                        <span className={labelClass}>Hair Style</span>
-                        <div className="grid grid-cols-3 gap-2">
-                            {['Bob', 'Pigtails', 'Spiky', 'Long', 'Bun', 'Afro', 'Mohawk', 'Side', 'Bald'].map((label, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => updateDoll('hairStyle', i)}
-                                    className={`px-1 py-2 rounded-lg text-[10px] font-bold border-2 transition-all touch-manipulation ${doll.hairStyle === i
-                                        ? 'bg-rose-500 text-white border-rose-500'
-                                        : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300'
-                                        }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
+            <div className="flex-1 min-h-0 flex flex-col bg-white">
+                <div ref={wrapperRef} className="flex-1 min-h-0 overflow-hidden relative">
+                    <div className="flex flex-col gap-4 p-4 md:p-6 pb-[20px]">
+                        {/* Header with Delete */}
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-gray-900">Customize</h2>
+                            <button
+                                onClick={onDelete}
+                                className="bg-red-500 text-white rounded-xl px-4 min-h-[40px] text-sm font-bold shadow-md hover:bg-red-600 active:bg-red-700 transition-colors touch-manipulation"
+                            >
+                                Delete
+                            </button>
                         </div>
-                    </div>
 
-                    <div className="space-y-1.5">
-                        <span className={labelClass}>Outfit Type</span>
-                        <div className="grid grid-cols-3 gap-2">
-                            {['Tee', 'Dress', 'Overalls', 'Kimono', 'Cape', 'Hoodie', 'Suit', 'Quest'].map((label, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => updateDoll('outfitStyle', i)}
-                                    className={`px-1 py-2 rounded-lg text-[10px] font-bold border-2 transition-all touch-manipulation ${doll.outfitStyle === i
-                                        ? 'bg-rose-500 text-white border-rose-500'
-                                        : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300'
-                                        }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                        {/* Form Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <span className={labelClass}>Hair Style</span>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['Bob', 'Pigtails', 'Spiky', 'Long', 'Bun', 'Afro', 'Mohawk', 'Side', 'Bald'].map((label, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => updateDoll('hairStyle', i)}
+                                            className={`px-1 py-2 rounded-lg text-[10px] font-bold border-2 transition-all touch-manipulation ${doll.hairStyle === i
+                                                ? 'bg-rose-500 text-white border-rose-500'
+                                                : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300'
+                                                }`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
 
-                    <div className="space-y-1.5">
-                        <span className={labelClass}>Eye Style</span>
-                        <div className="grid grid-cols-3 gap-2">
-                            {['Dots', 'Happy', 'Sleepy', 'Anime', 'Wink', 'OMG', 'Angry', 'Tears', 'Heart'].map((label, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => updateDoll('eyeType', i)}
-                                    className={`px-1 py-2 rounded-lg text-[10px] font-bold border-2 transition-all touch-manipulation ${doll.eyeType === i
-                                        ? 'bg-rose-500 text-white border-rose-500'
-                                        : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300'
-                                        }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                            <div className="space-y-1.5">
+                                <span className={labelClass}>Outfit Type</span>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['Tee', 'Dress', 'Overalls', 'Kimono', 'Cape', 'Hoodie', 'Suit', 'Quest'].map((label, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => updateDoll('outfitStyle', i)}
+                                            className={`px-1 py-2 rounded-lg text-[10px] font-bold border-2 transition-all touch-manipulation ${doll.outfitStyle === i
+                                                ? 'bg-rose-500 text-white border-rose-500'
+                                                : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300'
+                                                }`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
 
-                    <ColorSection
-                        label="Skin Tone"
-                        field="skinColor"
-                        presets={['#f3d2c1', '#ffdbac', '#e0ac69', '#c68642', '#8d5524', '#3c2314']}
-                    />
+                            <div className="space-y-1.5">
+                                <span className={labelClass}>Eye Style</span>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['Dots', 'Happy', 'Sleepy', 'Anime', 'Wink', 'OMG', 'Angry', 'Tears', 'Heart'].map((label, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => updateDoll('eyeType', i)}
+                                            className={`px-1 py-2 rounded-lg text-[10px] font-bold border-2 transition-all touch-manipulation ${doll.eyeType === i
+                                                ? 'bg-rose-500 text-white border-rose-500'
+                                                : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300'
+                                                }`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
 
-                    <ColorSection
-                        label="Hair Color"
-                        field="hairColor"
-                        presets={['#6d4c41', '#2c3e50', '#f1c40f', '#e74c3c', '#ecf0f1', '#e056fd']}
-                    />
+                            <ColorSection
+                                label="Skin Tone"
+                                field="skinColor"
+                                presets={['#f3d2c1', '#ffdbac', '#e0ac69', '#c68642', '#8d5524', '#3c2314']}
+                            />
 
-                    <ColorSection
-                        label="Outfit Color"
-                        field="outfitColor"
-                        presets={['#ff6b6b', '#54a0ff', '#1dd1a1', '#feca57', '#5f27cd', '#2c3e50']}
-                    />
-                </div>
+                            <ColorSection
+                                label="Hair Color"
+                                field="hairColor"
+                                presets={['#6d4c41', '#2c3e50', '#f1c40f', '#e74c3c', '#ecf0f1', '#e056fd']}
+                            />
 
-                {/* Transform Controls */}
-                <div className="w-full bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col gap-3">
-                    <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">Pose & Size</h3>
-
-                    <div className="flex gap-4">
-                        <div className="flex flex-col gap-1.5 flex-1">
-                            <label className="text-xs font-bold text-gray-600">Scale X ({Number(transform.scaleX).toFixed(1)})</label>
-                            <input
-                                type="range" min="0.1" max="3" step="0.1" value={transform.scaleX}
-                                onChange={(e) => handleTransform('scaleX', e.target.value)}
-                                className={rangeClass}
+                            <ColorSection
+                                label="Outfit Color"
+                                field="outfitColor"
+                                presets={['#ff6b6b', '#54a0ff', '#1dd1a1', '#feca57', '#5f27cd', '#2c3e50']}
                             />
                         </div>
-                        <div className="flex flex-col gap-1.5 flex-1">
-                            <label className="text-xs font-bold text-gray-600">Scale Y ({Number(transform.scaleY).toFixed(1)})</label>
-                            <input
-                                type="range" min="0.1" max="3" step="0.1" value={transform.scaleY}
-                                onChange={(e) => handleTransform('scaleY', e.target.value)}
-                                className={rangeClass}
-                            />
-                        </div>
-                    </div>
 
-                    <div className="flex gap-4">
-                        <div className="flex flex-col gap-1.5 flex-1">
-                            <label className="text-xs font-bold text-gray-600">Skew X ({Math.round(transform.skewX)}°)</label>
-                            <input
-                                type="range" min="-45" max="45" value={transform.skewX}
-                                onChange={(e) => handleTransform('skewX', e.target.value)}
-                                className={rangeClass}
-                            />
+                        {/* Transform Controls */}
+                        <div className="w-full bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col gap-3">
+                            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">Pose & Size</h3>
+
+                            <div className="flex gap-4">
+                                <div className="flex flex-col gap-1.5 flex-1">
+                                    <label className="text-xs font-bold text-gray-600">Scale X ({Number(transform.scaleX).toFixed(1)})</label>
+                                    <input
+                                        type="range" min="0.1" max="3" step="0.1" value={transform.scaleX}
+                                        onChange={(e) => handleTransform('scaleX', e.target.value)}
+                                        className={rangeClass}
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5 flex-1">
+                                    <label className="text-xs font-bold text-gray-600">Scale Y ({Number(transform.scaleY).toFixed(1)})</label>
+                                    <input
+                                        type="range" min="0.1" max="3" step="0.1" value={transform.scaleY}
+                                        onChange={(e) => handleTransform('scaleY', e.target.value)}
+                                        className={rangeClass}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <div className="flex flex-col gap-1.5 flex-1">
+                                    <label className="text-xs font-bold text-gray-600">Skew X ({Math.round(transform.skewX)}°)</label>
+                                    <input
+                                        type="range" min="-45" max="45" value={transform.skewX}
+                                        onChange={(e) => handleTransform('skewX', e.target.value)}
+                                        className={rangeClass}
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5 flex-1">
+                                    <label className="text-xs font-bold text-gray-600">Skew Y ({Math.round(transform.skewY)}°)</label>
+                                    <input
+                                        type="range" min="-45" max="45" value={transform.skewY}
+                                        onChange={(e) => handleTransform('skewY', e.target.value)}
+                                        className={rangeClass}
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex flex-col gap-1.5 flex-1">
-                            <label className="text-xs font-bold text-gray-600">Skew Y ({Math.round(transform.skewY)}°)</label>
-                            <input
-                                type="range" min="-45" max="45" value={transform.skewY}
-                                onChange={(e) => handleTransform('skewY', e.target.value)}
-                                className={rangeClass}
+
+                        {/* Story */}
+                        <div className="w-full pb-[10px]">
+                            <span className={labelClass}>Their Story</span>
+                            <textarea
+                                value={doll.story}
+                                onChange={(e) => updateDoll('story', e.target.value)}
+                                placeholder="Write a sweet story..."
+                                className="w-full h-20 p-3 rounded-xl border-2 border-gray-300 bg-white text-[16px] text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-rose-400 transition-all touch-manipulation block"
                             />
                         </div>
                     </div>
                 </div>
 
-                {/* Story */}
-                <div className="w-full">
-                    <span className={labelClass}>Their Story</span>
-                    <textarea
-                        value={doll.story}
-                        onChange={(e) => updateDoll('story', e.target.value)}
-                        placeholder="Write a sweet story..."
-                        className="w-full h-20 p-3 rounded-xl border-2 border-gray-300 bg-white text-[16px] text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-rose-400 transition-all touch-manipulation"
-                    />
-                </div>
-
-                {/* Save Button — sticky bottom on mobile */}
-                <div className="mt-auto pt-3 sticky bottom-0 bg-white/95 backdrop-blur-sm pb-2 -mx-4 px-4 -mb-4 md:static md:bg-transparent md:p-0 md:m-0 z-10">
+                {/* Save Button */}
+                <div className="w-full p-4 bg-white/95 backdrop-blur-sm border-t border-gray-100 z-10 shrink-0">
                     <button
                         className="w-full py-4 min-h-[52px] rounded-xl bg-rose-500 text-white shadow-lg hover:bg-rose-600 active:bg-rose-700 active:scale-[0.98] transition-all font-bold text-base uppercase tracking-wide touch-manipulation"
                         onClick={() => onSave({ ...doll, transform })}

@@ -1,10 +1,13 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
-import VillageMap from "../components/VillageMap";
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import BScroll from 'better-scroll';
+import VillageMap from '../components/VillageMap';
 import Icons from "../components/Icons";
-import DollEditor from "../components/DollEditor";
-import HouseEditor from "../components/HouseEditor";
-import ObjectEditor from "../components/ObjectEditor";
+import ObjectEditor from '../components/ObjectEditor';
+import DollEditor from '../components/DollEditor';
+import HouseEditor from '../components/HouseEditor';
+import { initialItems, getAsset } from '../components/GameAssets';
+import Intro from '../components/Intro';
 
 // Simple Minimap
 // const Minimap = ({ items }) => {
@@ -34,6 +37,7 @@ export default function Home() {
   const [groundColor, setGroundColor] = useState('#55efc4');
   const [highlightedId, setHighlightedId] = useState(null);
   const [horizonPos, setHorizonPos] = useState(50); // Percentage
+  const [cameraZoom, setCameraZoom] = useState(1); // Zoom level
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const scrollContainerRef = useRef(null);
@@ -42,9 +46,11 @@ export default function Home() {
   const menuRef = useRef(null);
   const [isMuted, setIsMuted] = useState(false);
   const [currentSong, setCurrentSong] = useState(null);
+  const [showUI, setShowUI] = useState(true);
   const [showDock, setShowDock] = useState(false);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
+  const [showIntro, setShowIntro] = useState(false); // Controls intro visibility
 
   // Close menu & music panel when clicking outside
   useEffect(() => {
@@ -69,7 +75,16 @@ export default function Home() {
     { name: 'Area Navida Relics Xmas', file: '/musics/Area_-_Navida_Relics_Xmas.mp3' },
     { name: 'Area Ruined Temple', file: '/musics/Area_-_Ruined_Temple.mp3' },
     { name: 'Area Rakau Plains', file: '/musics/Area_-_Rakau_Plains.mp3' },
-    { name: 'Area Saham Crater', file: '/musics/Area_-_Saham_Crater.mp3' },
+
+
+    { name: 'Area Lutaros Carven', file: '/musics/Area_-_Lutaros_Carven.mp3' },
+    { name: 'Area New Moon Palace', file: '/musics/Area_-_New_Moon_Palace.mp3' },
+    { name: 'Area Avanclain Shrine', file: '/musics/Area_-_Avanclain_Shrine.mp3' },
+    { name: 'Area Ribisco Cave', file: '/musics/Area_-_Ribisco_Cave.mp3' },
+    { name: 'Area Rihom Plain', file: '/musics/Area_-_Rihom_Plain.mp3' },
+    { name: 'Boss Forest Wolf', file: '/musics/Boss_-_Forest_Wolf.mp3' },
+
+
   ];
 
   // Initialize Audio (No Auto-play)
@@ -100,6 +115,7 @@ export default function Home() {
         if (parsed.skyColor) setSkyColor(parsed.skyColor);
         if (parsed.groundColor) setGroundColor(parsed.groundColor);
         if (parsed.horizonPos) setHorizonPos(parsed.horizonPos);
+        if (parsed.cameraZoom) setCameraZoom(parsed.cameraZoom);
       } catch (e) {
         console.error("Failed to load save", e);
       }
@@ -114,6 +130,12 @@ export default function Home() {
         { id: 'house-1', type: 'house_cottage', x: 100, y: 500, data: { color: '#ff9f43', roofColor: '#e15f41', transform: { scaleX: defaultScale, scaleY: defaultScale, rotate: 0 } } },
         { id: 'tree-1', type: 'tree_oak', x: 300, y: 400, data: { transform: { scaleX: defaultScale, scaleY: defaultScale, rotate: 0 } } }
       ]);
+    }
+
+    // Check intro
+    const hasSeenIntro = localStorage.getItem('village-has-seen-intro');
+    if (!hasSeenIntro) {
+      setShowIntro(true);
     }
   }, []);
 
@@ -140,7 +162,8 @@ export default function Home() {
         items: itemsRef.current,
         skyColor: skyRef.current,
         groundColor: groundRef.current,
-        horizonPos: horizonRef.current
+        horizonPos: horizonRef.current,
+        cameraZoom: cameraZoom
       };
       localStorage.setItem('village-state', JSON.stringify(data));
       // Optional: console.log("Game Saved");
@@ -173,11 +196,12 @@ export default function Home() {
     const dockSafeZone = 180;
     // Spawn in the currently visible viewport area (offset by scroll)
     const scrollX = scrollContainerRef.current?.scrollLeft || 0;
+    const scrollY = scrollContainerRef.current?.scrollTop || 0;
 
     // Calculate spawning Y range based on type
     const horizonPixel = (window.innerHeight * (parseInt(horizonPos) / 100));
     let spawnY;
-    let spawnX = scrollX + Math.random() * (window.innerWidth - 100) + 50;
+    let spawnX = (scrollX + Math.random() * (window.innerWidth - 100) + 50) / cameraZoom;
 
     if (type === 'sun') {
       // Spawn in sky (top to horizon)
@@ -210,7 +234,16 @@ export default function Home() {
 
       // Ensure we have a valid range
       const validMaxY = Math.max(safeMinY + 50, safeMaxY);
-      spawnY = safeMinY + Math.random() * (validMaxY - safeMinY);
+      let baseSpawnY = safeMinY + Math.random() * (validMaxY - safeMinY);
+
+      // If we scrolled, try to spawn relatively centered in the visible area if it fits
+      let visibleCenterY = (scrollY + window.innerHeight / 2) / cameraZoom;
+      if (visibleCenterY > safeMinY && visibleCenterY < window.innerHeight - 50) {
+        spawnY = visibleCenterY + (Math.random() - 0.5) * 100;
+        spawnY = Math.max(safeMinY, Math.min(spawnY, window.innerHeight - 50));
+      } else {
+        spawnY = baseSpawnY;
+      }
     }
 
     const newItem = {
@@ -358,50 +391,20 @@ export default function Home() {
 
 
   const dockRef = React.useRef(null);
-  const isDockDown = React.useRef(false);
-  const dockStartX = React.useRef(0);
-  const dockScrollLeft = React.useRef(0);
 
-  const handleDockMouseDown = (e) => {
-    isDockDown.current = true;
-    dockRef.current.classList.add('cursor-grabbing');
-    dockRef.current.classList.remove('cursor-grab');
-    dockStartX.current = e.pageX - dockRef.current.offsetLeft;
-    dockScrollLeft.current = dockRef.current.scrollLeft;
-  };
-  const handleDockMouseLeave = () => {
-    isDockDown.current = false;
-    dockRef.current?.classList.remove('cursor-grabbing');
-    dockRef.current?.classList.add('cursor-grab');
-  };
-  const handleDockMouseUp = () => {
-    isDockDown.current = false;
-    dockRef.current?.classList.remove('cursor-grabbing');
-    dockRef.current?.classList.add('cursor-grab');
-  };
-  const handleDockMouseMove = (e) => {
-    if (!isDockDown.current) return;
-    e.preventDefault();
-    const x = e.pageX - dockRef.current.offsetLeft;
-    const walk = (x - dockStartX.current); // 1:1 scroll speed
-    dockRef.current.scrollLeft = dockScrollLeft.current - walk;
-  };
-
-  const handleDockTouchStart = (e) => {
-    if (!dockRef.current) return;
-    isDockDown.current = true;
-    dockStartX.current = e.touches[0].pageX - dockRef.current.offsetLeft;
-    dockScrollLeft.current = dockRef.current.scrollLeft;
-  };
-  const handleDockTouchMove = (e) => {
-    if (!isDockDown.current || !dockRef.current) return;
-    const x = e.touches[0].pageX - dockRef.current.offsetLeft;
-    const walk = (x - dockStartX.current); // 1:1 scroll speed
-    dockRef.current.scrollLeft = dockScrollLeft.current - walk;
-  };
-  const handleDockTouchEnd = () => {
-    isDockDown.current = false;
-  };
+  useEffect(() => {
+    if (showDock && dockRef.current) {
+      const bs = new BScroll(dockRef.current, {
+        scrollX: true,
+        scrollY: false,
+        click: true,
+        bounce: true,
+        mouseWheel: true,
+        preventDefaultException: { tagName: /^(INPUT|TEXTAREA|BUTTON|SELECT)$/ }
+      });
+      return () => bs.destroy();
+    }
+  }, [showDock]);
 
   // BGM — play selected song, no loop
   // BGM — play selected song, cycle to next on end
@@ -458,25 +461,34 @@ export default function Home() {
     setCurrentSong(null);
   };
 
+  const handleIntroComplete = () => {
+    setShowIntro(false);
+    localStorage.setItem('village-has-seen-intro', 'true');
+  };
+
+  if (showIntro) {
+    return <Intro onComplete={handleIntroComplete} />;
+  }
+
   return (
-    <div className="w-screen h-screen relative overflow-x-auto overflow-y-hidden">
+    <div className="w-screen h-screen relative overflow-hidden touch-none overscroll-none">
 
       {/* Scrollable world container */}
       <div
         ref={scrollContainerRef}
-        className="w-screen h-screen overflow-x-auto overflow-y-hidden"
-        style={{ scrollbarWidth: 'thin', scrollbarColor: '#ff6b6b transparent' }}
+        className="w-screen h-screen overflow-hidden touch-none overscroll-none outline-none"
+        style={{ scrollbarWidth: 'none' }}
       >
         {/* Wide world content */}
-        <div className="relative" style={{ width: '300vw', height: '100vh', minHeight: '100vh' }}>
+        <div className="relative overflow-hidden" style={{ width: `${Math.max(300, 100 / cameraZoom)}vw`, height: `${Math.max(100, 100 / cameraZoom)}vh`, transform: `scale(${cameraZoom})`, transformOrigin: 'top left' }}>
           {/* Background Layers */}
           <div
             className="absolute top-0 left-0 w-full transition-colors duration-1000 ease-in-out"
-            style={{ height: `${horizonPos}%`, background: skyColor }}
+            style={{ height: `${horizonPos}vh`, background: skyColor }}
           />
           <div
             className="absolute left-0 w-full bottom-0 transition-colors duration-1000 ease-in-out"
-            style={{ height: `${100 - horizonPos}%`, background: groundColor }}
+            style={{ top: `${horizonPos}vh`, background: groundColor }}
           />
 
           {/* Village Canvas */}
@@ -489,6 +501,8 @@ export default function Home() {
             isSelectionMode={isSelectionMode}
             onToggleSelection={() => setIsSelectionMode(!isSelectionMode)}
             scrollContainerRef={scrollContainerRef}
+            cameraZoom={cameraZoom}
+            setCameraZoom={setCameraZoom}
           />
         </div>
       </div>
@@ -510,46 +524,66 @@ export default function Home() {
 
       {/* UI Overlay - Dock */}
       <div
-        ref={dockRef}
-        onMouseDown={handleDockMouseDown}
-        onMouseLeave={handleDockMouseLeave}
-        onMouseUp={handleDockMouseUp}
-        onMouseMove={handleDockMouseMove}
-        onTouchStart={handleDockTouchStart}
-        onTouchMove={handleDockTouchMove}
-        onTouchEnd={handleDockTouchEnd}
-        className={`absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-3 flex gap-2 z-[1000000] max-w-[95vw] overflow-x-auto bg-white/65 backdrop-blur-xl border border-white/50 rounded-2xl shadow-[0_4px_16px_0_rgba(31,38,135,0.15)] pointer-events-auto overscroll-x-contain scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent cursor-grab active:cursor-grabbing transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${showDock ? 'translate-y-0 opacity-100' : 'translate-y-[200%] opacity-0 pointer-events-none'}`}
+        className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000000] w-[95vw] md:w-[80vw] bg-white/65 backdrop-blur-xl border border-white/50 rounded-2xl shadow-[0_4px_16px_0_rgba(31,38,135,0.15)] pointer-events-auto transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${showDock ? 'translate-y-0 opacity-100' : 'translate-y-[200%] opacity-0 pointer-events-none'}`}
       >
-        <div className="flex gap-1.5 border-r border-gray-300 pr-2 items-center">
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_cottage')} title="Cottage">🏠</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_mansion')} title="Mansion">🏰</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_pagoda')} title="Pagoda">⛩️</button>
-        </div>
-        <div className="flex gap-1.5 border-r border-gray-300 pr-2 items-center">
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('tree_oak')} title="Oak">🌳</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('grass')} title="Grass">☘️</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('grass_two')} title="Weed">🌿</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('tree_pine')} title="Pine">🌲</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('tree_sakura')} title="Sakura">🌸</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('bush')} title="Bush">🌿</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('rock')} title="Rock">🪨</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('flower_rose')} title="Rose">🌹</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('flower_tulip')} title="Tulip">🌷</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('flower_sunflower')} title="Sunflower">🌻</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('sun')} title="Sun">☀️</button>
-        </div>
-        <div className="flex gap-1.5 items-center">
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('river_h')} title="River H">🛶</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('river_v')} title="River V">🌊</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('pond')} title="Pond">💧</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('fish')} title="Fish">🐟</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('garden')} title="Garden">🌻</button>
-          <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('doll')} title="Doll">👶</button>
-        </div>
-      </div>
+        <div
+          ref={dockRef}
+          className="w-full h-full overflow-hidden px-4 py-3 cursor-grab active:cursor-grabbing"
+        >
+          <div className="flex gap-4 inline-flex w-max items-center pr-8">
+            {/* Group 1: Houses */}
+            <div className="flex gap-1.5 border-r border-gray-300 pr-4 items-center">
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_cottage')} title="Cottage">🏠</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_mansion')} title="Mansion">🏰</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_pagoda')} title="Pagoda">⛩️</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_cabin')} title="Cabin">🪵</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_castle')} title="Castle">🏯</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_skyscraper')} title="Skyscraper">🏢</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_barn')} title="Barn">🛖</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_tent')} title="Tent">⛺</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_modern')} title="Modern">🏘️</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('house_shop')} title="Shop">🏪</button>
+            </div>
 
+            {/* Group 2: Nature */}
+            <div className="flex gap-1.5 border-r border-gray-300 pr-4 items-center">
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('tree_oak')} title="Oak">🌳</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('grass')} title="Grass">☘️</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('grass_two')} title="Weed">🌿</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('tree_pine')} title="Pine">🌲</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('tree_sakura')} title="Sakura">🌸</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('bush')} title="Bush">🌿</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('rock')} title="Rock">🪨</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('flower_rose')} title="Rose">🌹</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('flower_tulip')} title="Tulip">🌷</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('flower_sunflower')} title="Sunflower">🌻</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('cactus')} title="Cactus">🌵</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('mushroom')} title="Mushroom">🍄</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('log')} title="Log">🪵</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('stump')} title="Stump">🪓</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('bamboo')} title="Bamboo">🎋</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('crystal')} title="Crystal">💎</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('sun')} title="Sun">☀️</button>
+            </div>
 
-      {/* Top Right Menu */}
+            {/* Group 3: Features */}
+            <div className="flex gap-1.5 items-center">
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('river_h')} title="River H">🛶</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('river_v')} title="River V">🌊</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('pond')} title="Pond">💧</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('dirt_path_h')} title="Dirt Path H">🛤️</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('dirt_path_v')} title="Dirt Path V">🛤️</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('stone_path_h')} title="Stone Path H">🪨</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('stone_path_v')} title="Stone Path V">🪨</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('bridge_h')} title="Bridge H">🌉</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('bridge_v')} title="Bridge V">🌉</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('fish')} title="Fish">🐟</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('garden')} title="Garden">🌻</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('doll')} title="Doll">👶</button>
+            </div>
+          </div>
+        </div>
+      </div>      {/* Top Right Menu */}
       <div ref={menuRef} className="fixed top-4 right-4 z-50 flex flex-col items-end z-[1000]">
         <button
           onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -623,71 +657,97 @@ export default function Home() {
 
       {/* Intro / Title + Bg Color Picker */}
       <div className="fixed top-4 left-4 z-50 pointer-events-none max-w-[90vw]">
-        <h1 className="text-xl md:text-3xl font-extrabold text-[#2d3436] drop-shadow-md">
-          Village Decor 🌸
-        </h1>
-        <p className="opacity-70 text-xs md:text-sm mt-0.5 text-gray-700">Drag items to decorate! Click to edit.</p>
-
-        {audioReady && !currentSong && (
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <h1 className="text-xl md:text-3xl font-extrabold text-[#2d3436] drop-shadow-md">
+            Village Decor 🌸
+          </h1>
           <button
-            onClick={startMusic}
-            className="pointer-events-auto mt-2 bg-[#00b894] hover:bg-[#00a884] text-white px-4 py-2 rounded-xl shadow-lg font-bold flex items-center gap-2 transition-all animate-pulse"
+            onClick={() => setShowUI(!showUI)}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/80 hover:bg-white shadow-sm border border-gray-200 transition-all text-sm active:scale-95 touch-manipulation"
+            title={showUI ? "Hide Controls" : "Show Controls"}
           >
-            🎵 Start Music
+            {showUI ? '👁️' : '🙈'}
           </button>
-        )}
-
-        <div className="pointer-events-auto mt-2 flex flex-col gap-2 max-w-sm">
-          <div className="flex gap-2">
-            <button
-              className={`py-2 px-4 rounded-xl cursor-pointer text-xs font-bold shadow-md transition-all min-h-[40px] border-2 whitespace-nowrap touch-manipulation ${isSelectionMode
-                ? 'bg-[#00b894] text-white border-[#00a884] hover:bg-[#00a884]'
-                : 'bg-white text-gray-900 border-gray-200 hover:bg-gray-50 hover:shadow-lg'
-                }`}
-              onClick={() => setIsSelectionMode(!isSelectionMode)}
-            >
-              {isSelectionMode ? '✅ Done' : '🖱️ Select'}
-            </button>
-
-            <button
-              className="py-2 px-4 rounded-xl cursor-pointer text-xs font-bold shadow-md transition-all min-h-[40px] border-2 bg-white text-gray-900 border-gray-200 hover:bg-gray-50 hover:shadow-lg hover:text-red-500 whitespace-nowrap touch-manipulation"
-              onClick={() => {
-                if (confirm("Start over with a new village?")) {
-                  isResettingRef.current = true; // Block auto-save
-                  localStorage.removeItem('village-items');
-                  localStorage.removeItem('village-state');
-                  window.location.reload();
-                }
-
-              }}
-            >
-              🔄 Reset
-            </button>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <label className="flex flex-col justify-center gap-0.5 bg-white p-1.5 rounded-lg text-[10px] font-bold shadow-md border-2 border-gray-100 h-10 min-w-[50px]">
-              <span className="text-black leading-none">Sky</span>
-              <input type="color" value={skyColor} onChange={(e) => setSkyColor(e.target.value)} className="border-none w-full h-4 cursor-pointer bg-transparent rounded" />
-            </label>
-
-            <label className="flex flex-col justify-center gap-0.5 bg-white p-1.5 rounded-lg text-[10px] font-bold shadow-md border-2 border-gray-100 h-10 min-w-[50px]">
-              <span className="text-black leading-none">Ground</span>
-              <input type="color" value={groundColor} onChange={(e) => setGroundColor(e.target.value)} className="border-none w-full h-4 cursor-pointer bg-transparent rounded" />
-            </label>
-
-            <label className="flex flex-col justify-center gap-0.5 bg-white p-1.5 rounded-lg text-[10px] font-bold shadow-md border-2 border-gray-100 h-10 w-24">
-              <span className="text-black leading-none">Horizon</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={horizonPos}
-                onChange={(e) => setHorizonPos(e.target.value)}
-                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#00b894]"
-              />
-            </label>
-          </div>
         </div>
+
+        {showUI && (
+          <div className="animate-fade-in origin-top-left transition-all">
+            <p className="opacity-70 text-xs md:text-sm mt-0.5 text-gray-700">Drag items to decorate! Click to edit.</p>
+
+            {audioReady && !currentSong && (
+              <button
+                onClick={startMusic}
+                className="pointer-events-auto mt-2 bg-[#00b894] hover:bg-[#00a884] text-white px-4 py-2 rounded-xl shadow-lg font-bold flex items-center gap-2 transition-all animate-pulse"
+              >
+                🎵 Start Music
+              </button>
+            )}
+
+            <div className="pointer-events-auto mt-2 flex flex-col gap-2 max-w-sm">
+              <div className="flex gap-2">
+                <button
+                  className={`py-2 px-4 rounded-xl cursor-pointer text-xs font-bold shadow-md transition-all min-h-[40px] border-2 whitespace-nowrap touch-manipulation ${isSelectionMode
+                    ? 'bg-[#00b894] text-white border-[#00a884] hover:bg-[#00a884]'
+                    : 'bg-white text-gray-900 border-gray-200 hover:bg-gray-50 hover:shadow-lg'
+                    }`}
+                  onClick={() => setIsSelectionMode(!isSelectionMode)}
+                >
+                  {isSelectionMode ? '✅ Done' : '🖱️ Select'}
+                </button>
+
+                <button
+                  className="py-2 px-4 rounded-xl cursor-pointer text-xs font-bold shadow-md transition-all min-h-[40px] border-2 bg-white text-gray-900 border-gray-200 hover:bg-gray-50 hover:shadow-lg hover:text-red-500 whitespace-nowrap touch-manipulation"
+                  onClick={() => {
+                    if (confirm("Start over with a new village?")) {
+                      isResettingRef.current = true; // Block auto-save
+                      localStorage.removeItem('village-items');
+                      localStorage.removeItem('village-state');
+                      localStorage.removeItem('village-has-seen-intro');
+                      window.location.reload();
+                    }
+
+                  }}
+                >
+                  🔄 Reset
+                </button>
+                <div className="flex gap-1 bg-white rounded-xl shadow-md border-2 border-gray-100 p-0.5 min-h-[40px] items-center touch-manipulation">
+                  <button onClick={() => setCameraZoom(z => Math.max(0.2, z - 0.1))} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center font-bold text-gray-600 text-lg">
+                    -
+                  </button>
+                  <div className="text-xs font-bold w-12 text-center text-gray-700 select-none">
+                    {Math.round(cameraZoom * 100)}%
+                  </div>
+                  <button onClick={() => setCameraZoom(z => Math.min(3, z + 0.1))} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center font-bold text-gray-600 text-lg">
+                    +
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <label className="flex flex-col justify-center gap-0.5 bg-white p-1.5 rounded-lg text-[10px] font-bold shadow-md border-2 border-gray-100 h-10 min-w-[50px]">
+                  <span className="text-black leading-none">Sky</span>
+                  <input type="color" value={skyColor} onChange={(e) => setSkyColor(e.target.value)} className="border-none w-full h-4 cursor-pointer bg-transparent rounded" />
+                </label>
+
+                <label className="flex flex-col justify-center gap-0.5 bg-white p-1.5 rounded-lg text-[10px] font-bold shadow-md border-2 border-gray-100 h-10 min-w-[50px]">
+                  <span className="text-black leading-none">Ground</span>
+                  <input type="color" value={groundColor} onChange={(e) => setGroundColor(e.target.value)} className="border-none w-full h-4 cursor-pointer bg-transparent rounded" />
+                </label>
+
+                <label className="flex flex-col justify-center gap-0.5 bg-white p-1.5 rounded-lg text-[10px] font-bold shadow-md border-2 border-gray-100 h-10 w-24">
+                  <span className="text-black leading-none">Horizon</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={horizonPos}
+                    onChange={(e) => setHorizonPos(e.target.value)}
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#00b894]"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* BGM Toggle */}

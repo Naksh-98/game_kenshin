@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Doll from './Doll';
 import { getAsset } from './GameAssets';
 
-export default function VillageMap({ items, setItems, onEditItem, highlightedId, horizonPos: rawHorizonPos = 50, isSelectionMode, onToggleSelection, scrollContainerRef }) {
+export default function VillageMap({ items, setItems, onEditItem, highlightedId, horizonPos: rawHorizonPos = 50, isSelectionMode, onToggleSelection, scrollContainerRef, cameraZoom = 1, setCameraZoom }) {
     const horizonPos = parseInt(rawHorizonPos, 10) || 50;
     const [draggingId, setDraggingId] = useState(null); // Can be 'multi' if dragging multiple
     const [offset, setOffset] = useState({ x: 0, y: 0 }); // Used for single item
@@ -11,10 +11,13 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
     const containerRef = useRef(null);
     const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
 
-    // Ref for synchronous touch tracking (Fixes mobile tap issues)
     const interactionData = useRef({ startX: 0, startY: 0, itemId: null });
     const backgroundDrag = useRef({ startX: 0, startScrollLeft: 0 });
     const lastTouchTime = useRef(0);
+    const initialPinchDist = useRef(null);
+    const initialPinchAngle = useRef(null);
+    const initialZoom = useRef(1);
+    const initialRotation = useRef(0);
 
     const [selectedIds, setSelectedIds] = useState([]);
 
@@ -335,6 +338,27 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
             if (Date.now() - lastTouchTime.current < 500) return;
         }
 
+        if (e.touches && e.touches.length === 2) {
+            setDraggingId('pinch-item');
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            const angle = Math.atan2(
+                e.touches[1].clientY - e.touches[0].clientY,
+                e.touches[1].clientX - e.touches[0].clientX
+            ) * 180 / Math.PI;
+
+            initialPinchDist.current = dist;
+            initialPinchAngle.current = angle;
+
+            const item = items.find(i => i.id === id);
+            initialZoom.current = item?.data?.transform?.scaleX || 1;
+            initialRotation.current = item?.data?.transform?.rotate || 0;
+            interactionData.current = { itemId: id };
+            return;
+        }
+
         if (isSelectionMode) {
             // Toggle selection
             if (selectedIds.includes(id)) {
@@ -352,11 +376,14 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
             const clientX = e.clientX ?? e.touches?.[0]?.clientX;
             const clientY = e.clientY ?? e.touches?.[0]?.clientY;
 
+            const rect = containerRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
+            const mapX = (clientX - rect.left) / cameraZoom;
+            const mapY = (clientY - rect.top) / cameraZoom;
+
             // Calculate offsets for ALL selected items relative to mouse
             const newOffsets = {};
             items.filter(i => selectedIds.includes(i.id)).forEach(i => {
-                const scrollX = scrollContainerRef?.current?.scrollLeft || 0;
-                newOffsets[i.id] = { dx: (clientX + scrollX) - i.x, dy: clientY - i.y };
+                newOffsets[i.id] = { dx: mapX - i.x, dy: mapY - i.y };
             });
             setDragOffsets(newOffsets);
             setDragStartPos({ x: clientX, y: clientY });
@@ -370,8 +397,11 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
             const clientX = e.clientX ?? e.touches?.[0]?.clientX;
             const clientY = e.clientY ?? e.touches?.[0]?.clientY;
             setDragStartPos({ x: clientX, y: clientY });
-            const scrollX = scrollContainerRef?.current?.scrollLeft || 0;
-            setOffset({ x: (clientX + scrollX) - x, y: clientY - y });
+
+            const rect = containerRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
+            const mapX = (clientX - rect.left) / cameraZoom;
+            const mapY = (clientY - rect.top) / cameraZoom;
+            setOffset({ x: mapX - x, y: mapY - y });
 
             // Sync ref for robust touch detection
             interactionData.current = { startX: clientX, startY: clientY, itemId: id };
@@ -387,15 +417,65 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
     };
 
     const handleMouseMove = (e) => {
+        if (draggingId === 'pinch-item' && e.touches && e.touches.length === 2) {
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            const angle = Math.atan2(
+                e.touches[1].clientY - e.touches[0].clientY,
+                e.touches[1].clientX - e.touches[0].clientX
+            ) * 180 / Math.PI;
+
+            let newZoom = initialZoom.current;
+            let newRotation = initialRotation.current;
+
+            if (initialPinchDist.current) {
+                const scale = dist / initialPinchDist.current;
+                newZoom = Math.max(0.1, Math.min(5, initialZoom.current * scale));
+            }
+
+            if (initialPinchAngle.current !== null) {
+                let deltaAngle = angle - initialPinchAngle.current;
+                if (deltaAngle > 180) deltaAngle -= 360;
+                if (deltaAngle < -180) deltaAngle += 360;
+                newRotation = initialRotation.current + deltaAngle;
+            }
+
+            setItems(prev => prev.map(item =>
+                item.id === interactionData.current.itemId
+                    ? { ...item, data: { ...item.data, transform: { ...(item.data?.transform || {}), scaleX: newZoom, scaleY: newZoom, rotate: newRotation } } }
+                    : item
+            ));
+            return;
+        }
+
+        if (draggingId === 'pinch' && e.touches && e.touches.length === 2) {
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            if (initialPinchDist.current) {
+                const scale = dist / initialPinchDist.current;
+                const newZoom = Math.max(0.2, Math.min(3, initialZoom.current * scale));
+                setCameraZoom && setCameraZoom(newZoom);
+            }
+            return;
+        }
+
         const clientX = e.clientX ?? e.touches?.[0]?.clientX;
         const clientY = e.clientY ?? e.touches?.[0]?.clientY;
 
-        const scrollX = scrollContainerRef?.current?.scrollLeft || 0;
+        const rect = containerRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
+        const mapX = (clientX - rect.left) / cameraZoom;
+        const mapY = (clientY - rect.top) / cameraZoom;
 
         if (draggingId === 'background') {
             if (scrollContainerRef?.current) {
                 const dx = clientX - backgroundDrag.current.startX;
+                const dy = clientY - backgroundDrag.current.startY;
                 scrollContainerRef.current.scrollLeft = backgroundDrag.current.startScrollLeft - dx;
+                scrollContainerRef.current.scrollTop = backgroundDrag.current.startScrollTop - dy;
             }
             return;
         }
@@ -404,25 +484,22 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
             setItems(prev => prev.map(item => {
                 if (selectedIds.includes(item.id)) {
                     const myOffset = dragOffsets[item.id] || { dx: 0, dy: 0 };
-                    const newX = clientX - myOffset.dx + scrollX;
-                    let newY = clientY - myOffset.dy;
+                    const newX = mapX - myOffset.dx;
+                    let newY = mapY - myOffset.dy;
 
                     // Restrict dolls to ground
                     if (item.type === 'doll') {
                         const groundY = (window.innerHeight * (horizonPos / 100)) - 20;
                         if (newY < groundY) newY = groundY;
                     }
-                    // Prevent dragging into dock area (bottom 100px)
-                    const maxY = window.innerHeight - 50;
-                    if (newY > maxY) newY = maxY;
                     return { ...item, x: newX, y: newY };
                 }
                 return item;
             }));
         } else if (draggingId) {
             if (clientX !== undefined && clientY !== undefined) {
-                const newX = clientX - offset.x + scrollX;
-                let newY = clientY - offset.y;
+                const newX = mapX - offset.x;
+                let newY = mapY - offset.y;
 
                 // Restrict dolls to ground
                 const draggingItem = items.find(i => i.id === draggingId);
@@ -430,9 +507,6 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
                     const groundY = (window.innerHeight * (horizonPos / 100)) - 20;
                     if (newY < groundY) newY = groundY;
                 }
-                // Prevent dragging into dock area (bottom 100px)
-                const maxY = window.innerHeight - 50;
-                if (newY > maxY) newY = maxY;
 
                 setItems(prev => prev.map(item =>
                     item.id === draggingId ? { ...item, x: newX, y: newY } : item
@@ -448,7 +522,7 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
             return;
         }
 
-        if (draggingId === 'background') {
+        if (draggingId === 'background' || draggingId === 'pinch' || draggingId === 'pinch-item') {
             setDraggingId(null);
             return;
         }
@@ -473,14 +547,45 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
     };
 
     const handleBackgroundMouseDown = (e) => {
+        if (e.touches && e.touches.length === 2 && setCameraZoom) {
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            const angle = Math.atan2(
+                e.touches[1].clientY - e.touches[0].clientY,
+                e.touches[1].clientX - e.touches[0].clientX
+            ) * 180 / Math.PI;
+
+            initialPinchDist.current = dist;
+            initialPinchAngle.current = angle;
+
+            // Check if we are already holding an item with the first finger
+            if (draggingId && draggingId !== 'background' && draggingId !== 'multi' && draggingId !== 'pinch') {
+                const item = items.find(i => i.id === draggingId);
+                initialZoom.current = item?.data?.transform?.scaleX || 1;
+                initialRotation.current = item?.data?.transform?.rotate || 0;
+                interactionData.current = { itemId: draggingId };
+                setDraggingId('pinch-item');
+                return;
+            }
+
+            initialZoom.current = cameraZoom;
+            setDraggingId('pinch');
+            return;
+        }
+
         if (!isSelectionMode) {
             setSelectedIds([]);
 
             // Start background drag
             const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+            const clientY = e.clientY ?? e.touches?.[0]?.clientY;
             backgroundDrag.current = {
                 startX: clientX,
-                startScrollLeft: scrollContainerRef?.current?.scrollLeft || 0
+                startY: clientY,
+                startScrollLeft: scrollContainerRef?.current?.scrollLeft || 0,
+                startScrollTop: scrollContainerRef?.current?.scrollTop || 0
             };
             setDraggingId('background');
         }
@@ -496,8 +601,8 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
             onMouseLeave={handleMouseUp}
             onTouchMove={handleMouseMove}
             onTouchEnd={handleMouseUp}
-            className={`h-screen relative bg-transparent ${draggingId ? 'cursor-grabbing' : 'cursor-default'}`}
-            style={{ width: '300vw', minWidth: '300vw', touchAction: draggingId ? 'none' : 'pan-x' }}
+            className={`w-full h-full relative bg-transparent touch-none overscroll-none ${draggingId ? 'cursor-grabbing' : 'cursor-default'}`}
+            style={{ touchAction: 'none' }}
         >                {items.map(item => {
             const isHighlighted = highlightedId === item.id;
             const isSelected = selectedIds.includes(item.id);
