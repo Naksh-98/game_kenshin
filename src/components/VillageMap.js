@@ -404,7 +404,7 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
 
                 return specificUpdates ? newItems : prevItems;
             });
-        }, 50); // 20fps for logic/movement
+        }, 100); // 10fps for logic/movement to save RAM/CPU
         return () => clearInterval(interval);
     }, [horizonPos, draggingId, selectedIds]);
 
@@ -742,144 +742,147 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
                     />
                 )}
 
-                {items.map(item => {
-                    const isTutorialTarget = tutorialStep === 3 && item.id === tutorialItemId;
-                    const isHighlighted = highlightedId === item.id || isTutorialTarget;
-                    const isSelected = selectedIds.includes(item.id);
-
-                    // Compute shadow offset based on sun position
+                {(() => {
                     const sunItem = items.find(i => i.type === 'sun');
-                    const sunX = sunItem ? sunItem.x : window.innerWidth / 2;
-                    const shadowSkew = Math.max(-60, Math.min(60, (item.x - sunX) * 0.1));
-                    const isGroundItem = ['pond', 'river_h', 'river_v', 'dirt_path_h', 'dirt_path_v', 'stone_path_h', 'stone_path_v', 'garden', 'sun', 'grass', 'grass_two'].includes(item.type);
+                    const sunX = sunItem ? sunItem.x : (typeof window !== 'undefined' ? window.innerWidth / 2 : 500);
 
-                    let currentFilter = isHighlighted ? 'drop-shadow(0 0 15px rgba(255, 234, 167, 0.8)) brightness(1.1)' :
-                        (isSelected ? 'drop-shadow(0 0 10px rgba(0, 184, 148, 0.9)) brightness(1.1)' : 'none');
+                    return items.map(item => {
+                        const isTutorialTarget = tutorialStep === 3 && item.id === tutorialItemId;
+                        const isHighlighted = highlightedId === item.id || isTutorialTarget;
+                        const isSelected = selectedIds.includes(item.id);
 
-                    // Fallback normal drop shadow if no sun is present
-                    if (!sunItem && !isGroundItem) {
-                        if (currentFilter === 'none') {
-                            currentFilter = 'drop-shadow(0px 10px 5px rgba(0, 0, 0, 0.25))';
-                        } else {
-                            currentFilter += ' drop-shadow(0px 10px 5px rgba(0, 0, 0, 0.25))';
+                        // Compute shadow offset based on sun position
+                        const shadowSkew = Math.max(-60, Math.min(60, (item.x - sunX) * 0.1));
+                        const isGroundItem = ['pond', 'river_h', 'river_v', 'dirt_path_h', 'dirt_path_v', 'stone_path_h', 'stone_path_v', 'garden', 'sun', 'grass', 'grass_two'].includes(item.type);
+
+                        let currentFilter = isHighlighted ? 'drop-shadow(0 0 15px rgba(255, 234, 167, 0.8)) brightness(1.1)' :
+                            (isSelected ? 'drop-shadow(0 0 10px rgba(0, 184, 148, 0.9)) brightness(1.1)' : 'none');
+
+                        // Fallback normal drop shadow if no sun is present
+                        if (!sunItem && !isGroundItem) {
+                            if (currentFilter === 'none') {
+                                currentFilter = 'drop-shadow(0px 10px 5px rgba(0, 0, 0, 0.25))';
+                            } else {
+                                currentFilter += ' drop-shadow(0px 10px 5px rgba(0, 0, 0, 0.25))';
+                            }
                         }
-                    }
 
-                    return (
-                        <div
-                            key={item.id}
-                            style={{
-                                position: 'absolute',
-                                left: item.x,
-                                top: item.y,
-                                transition: (item.npc?.action === 'walking' && draggingId !== item.id && !selectedIds.includes(item.id))
-                                    ? 'left 0.05s linear, top 0.05s linear, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                                    : 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                                transform: `
+                        return (
+                            <div
+                                key={item.id}
+                                style={{
+                                    position: 'absolute',
+                                    left: item.x,
+                                    top: item.y,
+                                    transition: (item.npc?.action === 'walking' && draggingId !== item.id && !selectedIds.includes(item.id))
+                                        ? 'left 0.05s linear, top 0.05s linear, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                                        : 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                    transform: `
                                 scale(${draggingId === item.id ? 1.1 : (isHighlighted ? 1.5 : 1)}) 
                                 translate(0, 0)
                                 rotate(${item.data?.transform?.rotate || 0}deg)
                                 scale(${item.data?.transform?.scaleX || 1}, ${item.data?.transform?.scaleY || 1})
                                 skew(${item.data?.transform?.skewX || 0}deg, ${item.data?.transform?.skewY || 0}deg)
                             `,
-                                zIndex: isTutorialTarget ? 10000009 : (isHighlighted ? 20000 : (item.type === 'doll' ? 10000 + Math.floor(item.y) : (item.type.startsWith('grass') ? 9000 + Math.floor(item.y) : (item.type.startsWith('house') ? 10 : (item.type.includes('tree') ? 20 : 30 + Math.floor(item.y)))))),
-                                cursor: 'grab', // Always allow grab, even if selected
-                                border: isSelected ? '2px dashed #00b894' : 'none', // Show border if selected ALWAYS
-                                borderRadius: '10px',
-                                touchAction: 'none' // Prevent scrolling while dragging
-                            }}
-                            onMouseDown={(e) => handleMouseDown(e, item.id, item.x, item.y)}
-                            onTouchStart={(e) => handleMouseDown(e, item.id, item.x, item.y)}
-                            onTouchEnd={(e) => {
-                                // Mobile Tap Detection (Robust)
-                                // We use the Ref data because State might not be updated yet for fast taps
-                                const validId = interactionData.current.itemId === item.id || draggingId === item.id;
+                                    zIndex: isTutorialTarget ? 10000009 : (isHighlighted ? 20000 : (item.type === 'doll' ? 10000 + Math.floor(item.y) : (item.type.startsWith('grass') ? 9000 + Math.floor(item.y) : (item.type.startsWith('house') ? 10 : (item.type.includes('tree') ? 20 : 30 + Math.floor(item.y)))))),
+                                    cursor: 'grab', // Always allow grab, even if selected
+                                    border: isSelected ? '2px dashed #00b894' : 'none', // Show border if selected ALWAYS
+                                    borderRadius: '10px',
+                                    touchAction: 'none' // Prevent scrolling while dragging
+                                }}
+                                onMouseDown={(e) => handleMouseDown(e, item.id, item.x, item.y)}
+                                onTouchStart={(e) => handleMouseDown(e, item.id, item.x, item.y)}
+                                onTouchEnd={(e) => {
+                                    // Mobile Tap Detection (Robust)
+                                    // We use the Ref data because State might not be updated yet for fast taps
+                                    const validId = interactionData.current.itemId === item.id || draggingId === item.id;
 
-                                if (validId) {
-                                    const touch = e.changedTouches?.[0];
-                                    if (touch) {
-                                        // Use ref start pos if available, else state
-                                        const startX = interactionData.current.itemId === item.id ? interactionData.current.startX : dragStartPos.x;
-                                        const startY = interactionData.current.itemId === item.id ? interactionData.current.startY : dragStartPos.y;
+                                    if (validId) {
+                                        const touch = e.changedTouches?.[0];
+                                        if (touch) {
+                                            // Use ref start pos if available, else state
+                                            const startX = interactionData.current.itemId === item.id ? interactionData.current.startX : dragStartPos.x;
+                                            const startY = interactionData.current.itemId === item.id ? interactionData.current.startY : dragStartPos.y;
 
-                                        const dist = Math.hypot(touch.clientX - startX, touch.clientY - startY);
+                                            const dist = Math.hypot(touch.clientX - startX, touch.clientY - startY);
 
-                                        if (dist < 30) { // Increased threshold for mobile (30px)
-                                            e.preventDefault(); // Prevent ghost clicks
-                                            onEditItem && onEditItem(item);
+                                            if (dist < 30) { // Increased threshold for mobile (30px)
+                                                e.preventDefault(); // Prevent ghost clicks
+                                                onEditItem && onEditItem(item);
+                                            }
                                         }
+                                        setDraggingId(null);
+                                        interactionData.current.itemId = null;
                                     }
-                                    setDraggingId(null);
-                                    interactionData.current.itemId = null;
-                                }
-                            }}
-                        >
-                            {/* Genuine Ground Shadow Layer - Only if Sun exists */}
-                            {!isGroundItem && sunItem && (
-                                <div style={{
-                                    position: 'absolute',
-                                    bottom: 0,
-                                    left: 0,
-                                    right: 0,
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    transformOrigin: 'bottom center',
-                                    transform: `skewX(${shadowSkew}deg) scaleY(-0.4) translate(0px, 0px)`,
-                                    filter: 'brightness(0) blur(4px) opacity(0.25)',
-                                    zIndex: -1,
-                                    pointerEvents: 'none'
-                                }}>
-                                    {item.type !== 'doll' ? getAsset(item.type, item.data) : (
-                                        <Doll
-                                            {...item.data}
-                                            isAnimating={item.npc?.action === 'walking'}
-                                            animationType={item.npc?.action === 'talking' ? 'talking' : (item.data.animationType || 'idle')}
-                                        />
+                                }}
+                            >
+                                {/* Genuine Ground Shadow Layer - Only if Sun exists */}
+                                {!isGroundItem && sunItem && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: 0,
+                                        left: 0,
+                                        right: 0,
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        transformOrigin: 'bottom center',
+                                        transform: `skewX(${shadowSkew}deg) scaleY(-0.4) translate(0px, 0px)`,
+                                        filter: 'brightness(0) blur(4px) opacity(0.25)',
+                                        zIndex: -1,
+                                        pointerEvents: 'none'
+                                    }}>
+                                        {item.type !== 'doll' ? getAsset(item.type, item.data) : (
+                                            <Doll
+                                                {...item.data}
+                                                isAnimating={item.npc?.action === 'walking'}
+                                                animationType={item.npc?.action === 'talking' ? 'talking' : (item.data.animationType || 'idle')}
+                                            />
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Main Asset Layer */}
+                                <div style={{ position: 'relative', zIndex: 1, filter: currentFilter }}>
+                                    {item.type !== 'doll' && getAsset(item.type, item.data)}
+
+                                    {isTutorialTarget && (
+                                        <div className="animate-pop absolute -top-[80px] left-1/2 -translate-x-1/2 bg-rose-500 text-white p-4 rounded-xl shadow-[0_10px_40px_rgba(225,29,72,0.6)] z-[10000010] min-w-[200px] text-center pointer-events-none ring-4 ring-rose-300">
+                                            <h3 className="font-bold text-sm mb-1 leading-tight">👆 Tap to customize!</h3>
+                                            <p className="text-xs opacity-90 leading-tight">You can change colors, adjust size, and more.</p>
+                                            <div className="absolute -bottom-3 left-1/2 -ml-3 w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[12px] border-t-rose-500" />
+                                        </div>
+                                    )}
+
+                                    {item.type === 'doll' && (
+                                        <div style={{ pointerEvents: 'none' }}>
+                                            <Doll
+                                                {...item.data}
+                                                isAnimating={item.npc?.action === 'walking'}
+                                                animationType={item.npc?.action === 'talking' ? 'talking' : (item.data.animationType || 'idle')}
+                                            />
+                                            {item.data.name && (
+                                                <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-white/80 px-2 rounded-[10px] text-[10px] whitespace-nowrap opacity-80 text-black">
+                                                    {item.data.name}
+                                                </div>
+                                            )}
+                                            {(item.npc?.action === 'talking' || item.npc?.action === 'thinking') && (
+                                                <div className="animate-pop absolute -top-[60px] left-1/2 -translate-x-1/2 bg-white px-3 py-2 rounded-xl shadow-lg z-[100] w-[140px] text-center pointer-events-none text-black">
+                                                    <div className="text-[10px] text-gray-500 mb-0.5">
+                                                        {item.npc.action === 'thinking' ? "Thinking..." : "Sharing a story..."}
+                                                    </div>
+                                                    <div className="text-[11px] italic text-gray-900">
+                                                        "{item.npc.action === 'thinking' ? item.npc.thought : (item.data.story?.slice(0, 40) || "Hello!")}..."
+                                                    </div>
+                                                    <div className="absolute -bottom-1.5 left-1/2 -ml-1.5 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-white" />
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
-                            )}
-
-                            {/* Main Asset Layer */}
-                            <div style={{ position: 'relative', zIndex: 1, filter: currentFilter }}>
-                                {item.type !== 'doll' && getAsset(item.type, item.data)}
-
-                                {isTutorialTarget && (
-                                    <div className="animate-pop absolute -top-[80px] left-1/2 -translate-x-1/2 bg-rose-500 text-white p-4 rounded-xl shadow-[0_10px_40px_rgba(225,29,72,0.6)] z-[10000010] min-w-[200px] text-center pointer-events-none ring-4 ring-rose-300">
-                                        <h3 className="font-bold text-sm mb-1 leading-tight">👆 Tap to customize!</h3>
-                                        <p className="text-xs opacity-90 leading-tight">You can change colors, adjust size, and more.</p>
-                                        <div className="absolute -bottom-3 left-1/2 -ml-3 w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[12px] border-t-rose-500" />
-                                    </div>
-                                )}
-
-                                {item.type === 'doll' && (
-                                    <div style={{ pointerEvents: 'none' }}>
-                                        <Doll
-                                            {...item.data}
-                                            isAnimating={item.npc?.action === 'walking'}
-                                            animationType={item.npc?.action === 'talking' ? 'talking' : (item.data.animationType || 'idle')}
-                                        />
-                                        {item.data.name && (
-                                            <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-white/80 px-2 rounded-[10px] text-[10px] whitespace-nowrap opacity-80 text-black">
-                                                {item.data.name}
-                                            </div>
-                                        )}
-                                        {(item.npc?.action === 'talking' || item.npc?.action === 'thinking') && (
-                                            <div className="animate-pop absolute -top-[60px] left-1/2 -translate-x-1/2 bg-white px-3 py-2 rounded-xl shadow-lg z-[100] w-[140px] text-center pointer-events-none text-black">
-                                                <div className="text-[10px] text-gray-500 mb-0.5">
-                                                    {item.npc.action === 'thinking' ? "Thinking..." : "Sharing a story..."}
-                                                </div>
-                                                <div className="text-[11px] italic text-gray-900">
-                                                    "{item.npc.action === 'thinking' ? item.npc.thought : (item.data.story?.slice(0, 40) || "Hello!")}..."
-                                                </div>
-                                                <div className="absolute -bottom-1.5 left-1/2 -ml-1.5 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-white" />
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })
+                })()}
             </div>
         </>
     );

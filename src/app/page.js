@@ -8,6 +8,7 @@ import DollEditor from '../components/DollEditor';
 import HouseEditor from '../components/HouseEditor';
 import { initialItems, getAsset } from '../components/GameAssets';
 import Intro from '../components/Intro';
+import PerformanceMonitor from '../components/PerformanceMonitor';
 
 // Simple Minimap
 // const Minimap = ({ items }) => {
@@ -525,6 +526,7 @@ export default function Home() {
 
   return (
     <div className="w-screen h-[100dvh] relative overflow-hidden touch-none overscroll-none">
+      {/* <PerformanceMonitor /> */}
 
       {/* Scrollable world container */}
       <div
