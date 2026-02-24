@@ -37,6 +37,7 @@ export default function Home() {
   const [groundColor, setGroundColor] = useState('#55efc4');
   const [highlightedId, setHighlightedId] = useState(null);
   const [horizonPos, setHorizonPos] = useState(50); // Percentage
+  const [weather, setWeather] = useState('none'); // 'none', 'snow', 'sakura'
   const [cameraZoom, setCameraZoom] = useState(1); // Zoom level
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -51,6 +52,9 @@ export default function Home() {
   const [showMusicPanel, setShowMusicPanel] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
   const [showIntro, setShowIntro] = useState(false); // Controls intro visibility
+
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialItemId, setTutorialItemId] = useState(null);
 
   // Close menu & music panel when clicking outside
   useEffect(() => {
@@ -116,6 +120,7 @@ export default function Home() {
         if (parsed.groundColor) setGroundColor(parsed.groundColor);
         if (parsed.horizonPos) setHorizonPos(parsed.horizonPos);
         if (parsed.cameraZoom) setCameraZoom(parsed.cameraZoom);
+        if (parsed.weather) setWeather(parsed.weather);
       } catch (e) {
         console.error("Failed to load save", e);
       }
@@ -138,6 +143,42 @@ export default function Home() {
       setShowIntro(true);
     }
   }, []);
+
+  // Tutorial Logic
+  useEffect(() => {
+    if (!showIntro) {
+      const hasSeenTutorial = localStorage.getItem('village-tutorial-done');
+      if (!hasSeenTutorial) {
+        setTutorialStep(1);
+      }
+    }
+  }, [showIntro]);
+
+  useEffect(() => {
+    if (tutorialStep === 1 && showDock) setTutorialStep(2);
+  }, [showDock, tutorialStep]);
+
+  const prevItemsLength = useRef(0);
+  useEffect(() => {
+    if (tutorialStep === 2 && items.length > prevItemsLength.current && prevItemsLength.current > 0) {
+      setTutorialStep(3);
+    }
+    prevItemsLength.current = items.length;
+  }, [items, tutorialStep]);
+
+  useEffect(() => {
+    if (tutorialStep === 3 && editingId) setTutorialStep(4);
+  }, [editingId, tutorialStep]);
+
+  const prevEditingId = useRef(null);
+  useEffect(() => {
+    if (tutorialStep === 4 && prevEditingId.current && !editingId) {
+      // setTutorialStep(5); // Manual progression now
+    }
+    prevEditingId.current = editingId;
+  }, [editingId, tutorialStep]);
+
+  // Manual progression for steps 5 and 6 via tooltips
 
   // Auto-save System
   const itemsRef = useRef(items);
@@ -256,13 +297,18 @@ export default function Home() {
 
     setItems([...items, newItem]);
 
-    // Highlight the new item
-    setHighlightedId(newItem.id);
-    setTimeout(() => setHighlightedId(null), 2000);
+    if (tutorialStep === 2) {
+      setTutorialItemId(newItem.id);
+      setHighlightedId(newItem.id);
+    } else {
+      // Highlight the new item
+      setHighlightedId(newItem.id);
+      setTimeout(() => setHighlightedId(null), 2000);
 
-    if (type === 'doll') {
-      setEditingId(newItem.id);
-      setEditorType('doll');
+      if (type === 'doll') {
+        setEditingId(newItem.id);
+        setEditorType('doll');
+      }
     }
 
   };
@@ -274,6 +320,8 @@ export default function Home() {
       skyColor,
       groundColor,
       horizonPos,
+      cameraZoom,
+      weather,
       timestamp: Date.now()
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -304,6 +352,8 @@ export default function Home() {
         if (parsed.skyColor) setSkyColor(parsed.skyColor);
         if (parsed.groundColor) setGroundColor(parsed.groundColor);
         if (parsed.horizonPos !== undefined) setHorizonPos(parsed.horizonPos);
+        if (parsed.cameraZoom !== undefined) setCameraZoom(parsed.cameraZoom);
+        if (parsed.weather) setWeather(parsed.weather);
         alert("Village loaded successfully!");
       } catch (err) {
         console.error(err);
@@ -327,6 +377,9 @@ export default function Home() {
     }));
     setEditingId(null);
     setEditorType(null);
+    if (tutorialStep === 4) {
+      setTutorialStep(5); // Manual progression after editor is closed
+    }
   };
 
   const handleDeleteItem = () => {
@@ -497,12 +550,15 @@ export default function Home() {
             setItems={setItems}
             onEditItem={handleEditItem}
             highlightedId={highlightedId}
+            tutorialItemId={tutorialItemId}
+            tutorialStep={tutorialStep}
             horizonPos={horizonPos}
             isSelectionMode={isSelectionMode}
             onToggleSelection={() => setIsSelectionMode(!isSelectionMode)}
             scrollContainerRef={scrollContainerRef}
             cameraZoom={cameraZoom}
             setCameraZoom={setCameraZoom}
+            weather={weather}
           />
         </div>
       </div>
@@ -510,13 +566,13 @@ export default function Home() {
       {/* Dock Toggle Button */}
       {showDock ? <button
         onClick={() => setShowDock(!showDock)}
-        className="fixed bottom-[max(100px,calc(100px+env(safe-area-inset-bottom)))] right-6 z-[10000001] w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle"
+        className={`fixed bottom-[max(100px,calc(100px+env(safe-area-inset-bottom)))] right-6 w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle ${tutorialStep === 1 ? 'z-[10000010] ring-[6px] ring-white bg-white/100 shadow-[0_0_30px_rgba(255,255,255,0.8)]' : 'z-[10000001]'}`}
         title={showDock ? "Close Menu" : "Open Items"}
       >
         <span className="bottom-1">✖️</span>
       </button> : <button
         onClick={() => setShowDock(!showDock)}
-        className="fixed bottom-[max(24px,calc(24px+env(safe-area-inset-bottom)))] right-6 z-[10000001] w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle"
+        className={`fixed bottom-[max(24px,calc(24px+env(safe-area-inset-bottom)))] right-6 w-14 h-14 bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center justify-center text-3xl hover:scale-110 active:scale-95 transition-all text-gray-700 animate-bounce-subtle ${tutorialStep === 1 ? 'z-[10000010] ring-[6px] ring-white bg-white/100 shadow-[0_0_30px_rgba(255,255,255,0.8)] animate-pulse' : 'z-[10000001]'}`}
         title={showDock ? "Close Menu" : "Open Items"}
       >
         <span className="text-blue-500">🎒</span>
@@ -524,7 +580,7 @@ export default function Home() {
 
       {/* UI Overlay - Dock */}
       <div
-        className={`absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 -translate-x-1/2 z-[1000000] w-[95vw] md:w-[80vw] bg-white/65 backdrop-blur-xl border border-white/50 rounded-2xl shadow-[0_4px_16px_0_rgba(31,38,135,0.15)] pointer-events-auto transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${showDock ? 'translate-y-0 opacity-100' : 'translate-y-[200%] opacity-0 pointer-events-none'}`}
+        className={`absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 -translate-x-1/2 w-[95vw] md:w-[80vw] bg-white/65 backdrop-blur-xl border border-white/50 rounded-2xl shadow-[0_4px_16px_0_rgba(31,38,135,0.15)] pointer-events-auto transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${showDock ? 'translate-y-0 opacity-100' : 'translate-y-[200%] opacity-0 pointer-events-none'} ${tutorialStep === 2 ? 'z-[10000010] ring-[4px] ring-white bg-white/90 shadow-[0_0_30px_rgba(255,255,255,0.5)]' : 'z-[1000000]'}`}
       >
         <div
           ref={dockRef}
@@ -564,6 +620,7 @@ export default function Home() {
               <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('bamboo')} title="Bamboo">🎋</button>
               <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('crystal')} title="Crystal">💎</button>
               <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('sun')} title="Sun">☀️</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('snowman')} title="Snowman">⛄</button>
             </div>
 
             {/* Group 3: Features */}
@@ -580,11 +637,12 @@ export default function Home() {
               <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('fish')} title="Fish">🐟</button>
               <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('garden')} title="Garden">🌻</button>
               <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('doll')} title="Doll">👶</button>
+              <button className="w-10 h-10 md:w-10 md:h-10 text-lg md:text-xl flex items-center justify-center rounded-full bg-white/65 border border-white/50 hover:bg-white/85 hover:scale-110 active:scale-95 transition-all shadow-sm touch-manipulation" onClick={() => addItem('snow_ground')} title="Snow Patch">❄️</button>
             </div>
           </div>
         </div>
       </div>      {/* Top Right Menu */}
-      <div ref={menuRef} className="fixed top-4 right-4 z-50 flex flex-col items-end z-[1000]">
+      <div ref={menuRef} className={`fixed top-4 right-4 flex flex-col items-end transition-all duration-300 ${tutorialStep === 6 ? 'z-[10000010] ring-[6px] ring-white/50 rounded-2xl bg-white/20 p-2 backdrop-blur-md shadow-[0_0_30px_rgba(255,255,255,0.5)]' : 'z-[1000]'}`}>
         <button
           onClick={() => setIsMenuOpen(!isMenuOpen)}
           className="w-10 h-10 bg-white/80 backdrop-blur-md border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-xl hover:bg-white transition-all text-gray-700 font-bold"
@@ -656,7 +714,7 @@ export default function Home() {
       </div>
 
       {/* Intro / Title + Bg Color Picker */}
-      <div className="fixed top-4 left-4 z-50 pointer-events-none max-w-[90vw]">
+      <div className={`fixed top-4 left-4 pointer-events-none max-w-[90vw] transition-all duration-300 ${tutorialStep === 5 ? 'z-[10000010] ring-[6px] ring-white/50 rounded-2xl bg-white/20 p-2 backdrop-blur-md shadow-[0_0_30px_rgba(255,255,255,0.5)]' : 'z-50'}`}>
         <div className="flex items-center gap-2 pointer-events-auto">
           <h1 className="text-xl md:text-3xl font-extrabold text-[#2d3436] drop-shadow-md">
             Village Decor 🌸
@@ -702,6 +760,7 @@ export default function Home() {
                       isResettingRef.current = true; // Block auto-save
                       localStorage.removeItem('village-items');
                       localStorage.removeItem('village-state');
+                      localStorage.removeItem('village-tutorial-done');
                       localStorage.removeItem('village-has-seen-intro');
                       window.location.reload();
                     }
@@ -744,6 +803,15 @@ export default function Home() {
                     className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#00b894]"
                   />
                 </label>
+
+                <label className="flex flex-col justify-center gap-0.5 bg-white p-1.5 rounded-lg text-[10px] font-bold shadow-md border-2 border-gray-100 h-10 w-24">
+                  <span className="text-black leading-none">Weather</span>
+                  <select value={weather} onChange={(e) => setWeather(e.target.value)} className="w-full h-4 bg-transparent border-none text-[10px] font-bold cursor-pointer text-[#00b894] outline-none">
+                    <option value="none">Clear</option>
+                    <option value="snow">Snow</option>
+                    <option value="sakura">Sakura</option>
+                  </select>
+                </label>
               </div>
             </div>
           </div>
@@ -761,11 +829,11 @@ export default function Home() {
 
       {/* Editor Modal */}
       {editingId && editorInitialData && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000005] flex items-center justify-center p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-hidden touch-none h-[100dvh] max-h-[100dvh] w-screen">
+        <div className={`fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-hidden touch-none h-[100dvh] max-h-[100dvh] w-screen ${tutorialStep === 4 ? 'z-[10000010]' : 'z-[10000005]'}`}>
           <div className="animate-pop relative w-full h-full max-w-[700px] md:h-auto md:w-auto flex flex-col items-center justify-center max-h-full">
             <button
               className="absolute -top-4 -right-4 z-10 w-12 h-12 flex items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation"
-              onClick={() => { setEditingId(null); setEditorType(null); }}
+              onClick={() => { setEditingId(null); setEditorType(null); if (tutorialStep === 4) setTutorialStep(5); }}
             >
               <Icons.Close />
             </button>
@@ -796,6 +864,60 @@ export default function Home() {
             )}
 
           </div>
+        </div>
+      )}
+
+      {/* Tutorial Overlays */}
+      {tutorialStep > 0 && <div className={`fixed inset-0 pointer-events-none z-[10000008] transition-colors duration-500 ${tutorialStep === 3 ? 'bg-black/10' : 'bg-black/60 backdrop-blur-sm'}`}></div>}
+
+      {tutorialStep === 1 && (
+        <div className="fixed bottom-[110px] right-6 bg-rose-500 text-white p-4 rounded-xl shadow-2xl z-[10000010] animate-bounce-subtle text-sm max-w-[200px] font-bold pointer-events-auto origin-bottom-right">
+          🎒 Welcome to Village Decor! Tap here to open your Bag!
+          <div className="absolute -bottom-2 right-4 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-rose-500"></div>
+        </div>
+      )}
+
+      {tutorialStep === 2 && showDock && (
+        <div className="fixed bottom-[200px] left-1/2 -translate-x-1/2 bg-rose-500 text-white p-4 rounded-xl shadow-2xl z-[10000010] animate-bounce-subtle text-sm max-w-[250px] font-bold pointer-events-auto">
+          👇 Tap any item in the dock to place it in your village!
+          <div className="absolute -bottom-2 left-1/2 -ml-2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-rose-500"></div>
+        </div>
+      )}
+
+      {tutorialStep === 4 && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-rose-500 text-white p-4 rounded-xl shadow-2xl z-[10000011] animate-bounce-subtle text-sm max-w-[300px] font-bold pointer-events-auto">
+          ✨ Endless customization! Change colors, hairstyles, or size. Click Save when you're done.
+          <div className="absolute -bottom-2 left-1/2 -ml-2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-rose-500"></div>
+        </div>
+      )}
+
+      {tutorialStep === 5 && (
+        <div className="fixed top-[200px] left-4 bg-rose-500 text-white p-5 rounded-xl shadow-2xl z-[10000010] animate-bounce-subtle text-sm max-w-[320px] pointer-events-auto">
+          <h3 className="font-bold text-lg mb-2">🌍 Environment Controls</h3>
+          <ul className="space-y-1.5 text-xs font-semibold leading-tight mb-1">
+            <li><span className="text-white bg-white/30 px-1 rounded">👁️</span> Hide or show this menu</li>
+            <li><span className="text-white bg-white/30 px-1 rounded">🎵</span> Turn on background music</li>
+            <li><span className="text-white bg-white/30 px-1 rounded">🖱️ Select</span> Tap to drag multiple items together</li>
+            <li><span className="text-white bg-white/30 px-1 rounded">🔄 Reset</span> Clear everything and start over</li>
+            <li><span className="text-white bg-white/30 px-1 rounded">+/-</span> Zoom in and zoom out</li>
+            <li><span className="text-white bg-white/30 px-1 rounded">Sky/Ground</span> Pick custom base colors</li>
+            <li><span className="text-white bg-white/30 px-1 rounded">Horizon</span> Slide to adjust the ground height</li>
+          </ul>
+          <button onClick={() => setTutorialStep(6)} className="mt-4 w-full bg-white text-rose-500 py-2.5 rounded-lg font-extrabold shadow-md active:scale-95 transition-transform text-sm drop-shadow-sm">Got it! ➔</button>
+          <div className="absolute -top-2 left-10 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[10px] border-b-rose-500"></div>
+        </div>
+      )}
+
+      {tutorialStep === 6 && (
+        <div className="fixed top-[80px] right-4 bg-rose-500 text-white p-5 rounded-xl shadow-2xl z-[10000010] animate-bounce-subtle text-sm max-w-[280px] pointer-events-auto origin-top-right">
+          <h3 className="font-bold text-lg mb-2">⚙️ Main Menu</h3>
+          <ul className="space-y-1.5 text-xs font-semibold leading-tight mb-1">
+            <li><span className="text-white bg-white/30 px-1 rounded">💾 Save File</span> Download your beautiful village to your device</li>
+            <li><span className="text-white bg-white/30 px-1 rounded">📂 Load File</span> Open a previously saved village file</li>
+            <li><span className="text-white bg-white/30 px-1 rounded">🎵 Music</span> Open the music player for relaxing tunes</li>
+          </ul>
+          <button onClick={() => { setTutorialStep(0); localStorage.setItem('village-tutorial-done', 'true'); }} className="mt-4 w-full bg-white text-rose-500 py-2.5 rounded-lg font-extrabold shadow-md active:scale-95 transition-transform text-sm drop-shadow-sm">Finish Tutorial ✓</button>
+          <div className="absolute -top-2 right-6 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[10px] border-b-rose-500"></div>
         </div>
       )}
 

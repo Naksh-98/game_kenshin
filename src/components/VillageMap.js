@@ -3,7 +3,40 @@ import React, { useState, useRef, useEffect } from 'react';
 import Doll from './Doll';
 import { getAsset } from './GameAssets';
 
-export default function VillageMap({ items, setItems, onEditItem, highlightedId, horizonPos: rawHorizonPos = 50, isSelectionMode, onToggleSelection, scrollContainerRef, cameraZoom = 1, setCameraZoom }) {
+const WeatherOverlay = ({ type }) => {
+    if (!type || type === 'none') return null;
+
+    // Fixed array avoids re-renders on every interaction
+    const particles = React.useMemo(() => Array.from({ length: 50 }).map((_, i) => {
+        const left = Math.random() * 100;
+        const width = type === 'snow' ? 4 + Math.random() * 4 : 10 + Math.random() * 6;
+        const height = type === 'snow' ? width : width * 0.8;
+        const duration = (type === 'snow' ? 8 : 12) + Math.random() * 5;
+        const delay = Math.random() * -15;
+
+        return (
+            <div
+                key={i}
+                className={`particle particle-${type}`}
+                style={{
+                    left: `${left}%`,
+                    width: `${width}px`,
+                    height: `${height}px`,
+                    animationDuration: `${duration}s`,
+                    animationDelay: `${delay}s`
+                }}
+            />
+        );
+    }), [type]);
+
+    return (
+        <div className="fixed inset-0 pointer-events-none z-[50000] overflow-hidden">
+            {particles}
+        </div>
+    );
+};
+
+export default function VillageMap({ items, setItems, onEditItem, highlightedId, horizonPos: rawHorizonPos = 50, isSelectionMode, onToggleSelection, scrollContainerRef, cameraZoom = 1, setCameraZoom, tutorialStep, tutorialItemId, weather }) {
     const horizonPos = parseInt(rawHorizonPos, 10) || 50;
     const [draggingId, setDraggingId] = useState(null); // Can be 'multi' if dragging multiple
     const [offset, setOffset] = useState({ x: 0, y: 0 }); // Used for single item
@@ -20,6 +53,19 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
     const initialRotation = useRef(0);
 
     const [selectedIds, setSelectedIds] = useState([]);
+
+    // Check water collisions
+    const isOverWater = (x, y, waterItems) => {
+        return waterItems.some(w => {
+            let type = w.type;
+            let wWidth = type === 'pond' ? 120 : (type === 'river_h' ? 100 : 60);
+            let wHeight = type === 'pond' ? 100 : (type === 'river_h' ? 60 : 100);
+            // using scaled size roughly
+            wWidth *= Math.abs(w.data?.transform?.scaleX || 1);
+            wHeight *= Math.abs(w.data?.transform?.scaleY || 1);
+            return x > w.x - 20 && x < w.x + wWidth + 20 && y > w.y - 20 && y < w.y + wHeight + 20;
+        });
+    };
 
     // Clear selection when mode changes - REMOVED so selection persists
     // useEffect(() => {
@@ -277,6 +323,16 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
                         const newX = npcState.startX + (npcState.targetX - npcState.startX) * progress;
                         const newY = npcState.startY + (npcState.targetY - npcState.startY) * progress;
 
+                        // Check water collision
+                        const waterItems = prevItems.filter(i => ['pond', 'river_h', 'river_v'].includes(i.type));
+                        if (isOverWater(newX, newY, waterItems)) {
+                            npcState.action = 'idle';
+                            npcState.lastUpdate = now;
+                            // cancel movement, stay in place
+                            specificUpdates = true;
+                            return { ...item, npc: { ...npcState } };
+                        }
+
                         if (progress >= 1) {
                             npcState.action = 'idle';
                             npcState.lastUpdate = now;
@@ -286,16 +342,41 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
                         return { ...item, x: newX, y: newY, npc: { ...npcState } };
                     }
 
-                    // Chatting
+                    // Chatting and Object interaction
                     if (npcState.action === 'idle') {
-                        const nearby = prevItems.find(other =>
+                        const nearbyDoll = prevItems.find(other =>
                             other.id !== item.id &&
                             other.type === 'doll' &&
                             other.npc?.action !== 'talking' &&
                             Math.hypot(other.x - item.x, other.y - item.y) < 80
                         );
-                        if (nearby) {
+                        const nearbyNature = prevItems.find(o => o.id !== item.id && (o.type.startsWith('tree_') || o.type === 'flower_rose') && Math.hypot(o.x - item.x, o.y - item.y) < 80);
+                        const nearbyWater = prevItems.find(o => ['pond', 'river_h', 'river_v'].includes(o.type) && Math.hypot(o.x - item.x, o.y - item.y) < 120);
+                        const nearbyHouse = prevItems.find(o => o.type.startsWith('house_') && Math.hypot(o.x - item.x, o.y - item.y) < 120);
+
+                        if (nearbyDoll) {
                             npcState.action = 'talking';
+                            npcState.lastUpdate = now;
+                            npcState.duration = 4000;
+                            specificUpdates = true;
+                            return { ...item, npc: { ...npcState } };
+                        } else if (nearbyWater && Math.random() < 0.05) {
+                            npcState.action = 'thinking';
+                            npcState.thought = ["Look at those fish!", "I love the sound of water.", "Should I go swimming? No, I can't swim.", "The pond is so peaceful."][Math.floor(Math.random() * 4)];
+                            npcState.lastUpdate = now;
+                            npcState.duration = 4000;
+                            specificUpdates = true;
+                            return { ...item, npc: { ...npcState } };
+                        } else if (nearbyNature && Math.random() < 0.05) {
+                            npcState.action = 'thinking';
+                            npcState.thought = ["What a beautiful plant!", "Nature is so peaceful...", "I should plant more of these."][Math.floor(Math.random() * 3)];
+                            npcState.lastUpdate = now;
+                            npcState.duration = 4000;
+                            specificUpdates = true;
+                            return { ...item, npc: { ...npcState } };
+                        } else if (nearbyHouse && Math.random() < 0.05) {
+                            npcState.action = 'thinking';
+                            npcState.thought = ["Who lives here?", "Nice architecture!", "I wonder if they have cookies inside.", "Such a cozy place."][Math.floor(Math.random() * 4)];
                             npcState.lastUpdate = now;
                             npcState.duration = 4000;
                             specificUpdates = true;
@@ -303,7 +384,7 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
                         }
                     }
 
-                    if (npcState.action === 'talking') {
+                    if (npcState.action === 'talking' || npcState.action === 'thinking') {
                         if (now - npcState.lastUpdate > npcState.duration) {
                             npcState.action = 'idle';
                             npcState.lastUpdate = now;
@@ -592,99 +673,214 @@ export default function VillageMap({ items, setItems, onEditItem, highlightedId,
     };
 
     return (
-        <div
-            ref={containerRef}
-            onMouseDown={handleBackgroundMouseDown}
-            onTouchStart={handleBackgroundMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onTouchMove={handleMouseMove}
-            onTouchEnd={handleMouseUp}
-            className={`w-full h-full relative bg-transparent touch-none overscroll-none ${draggingId ? 'cursor-grabbing' : 'cursor-default'}`}
-            style={{ touchAction: 'none' }}
-        >                {items.map(item => {
-            const isHighlighted = highlightedId === item.id;
-            const isSelected = selectedIds.includes(item.id);
-            return (
-                <div
-                    key={item.id}
-                    style={{
-                        position: 'absolute',
-                        left: item.x,
-                        top: item.y,
-                        transition: (item.npc?.action === 'walking' && draggingId !== item.id && !selectedIds.includes(item.id))
-                            ? 'left 0.05s linear, top 0.05s linear, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                            : 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.3s ease',
-                        transform: `
+        <>
+            <WeatherOverlay type={weather} />
+            {/* God Rays Layer */}
+            {items.find(i => i.type === 'sun') && (() => {
+                const sunItem = items.find(i => i.type === 'sun');
+                return (
+                    <div
+                        className="animate-spin-slow"
+                        style={{
+                            position: 'absolute',
+                            opacity: 0.4,
+                            top: `${sunItem.y + 40 - 2000}px`,
+                            left: `${sunItem.x + 40 - 2000}px`,
+                            width: '4000px',
+                            height: '4000px',
+                            pointerEvents: 'none',
+                            zIndex: 15000, // Below UI
+                            transformOrigin: 'center',
+                            mixBlendMode: 'overlay',
+                            maskImage: 'radial-gradient(circle, black 0%, transparent 50%)',
+                            WebkitMaskImage: 'radial-gradient(circle, black 0%, transparent 50%)',
+                            background: `radial-gradient(circle, rgba(255, 255, 255, 0.4) 0%, rgba(255,255,255,0) 60%), 
+                                         conic-gradient(from 0deg at center, 
+                                            rgba(255, 255, 255, 0.0) 0deg, rgba(255, 255, 255, 0.3) 10deg, rgba(255, 255, 255, 0.0) 20deg, 
+                                            rgba(255, 255, 255, 0.4) 40deg, rgba(255, 255, 255, 0.0) 50deg, rgba(255, 255, 255, 0.2) 70deg, 
+                                            rgba(255, 255, 255, 0.0) 90deg, rgba(255, 255, 255, 0.4) 130deg, rgba(255, 255, 255, 0.0) 150deg, 
+                                            rgba(255, 255, 255, 0.3) 180deg, rgba(255, 255, 255, 0.0) 210deg, rgba(255, 255, 255, 0.4) 240deg, 
+                                            rgba(255, 255, 255, 0.0) 260deg, rgba(255, 255, 255, 0.2) 300deg, rgba(255, 255, 255, 0.0) 330deg, 
+                                            rgba(255, 255, 255, 0.3) 360deg)`
+                        }}
+                    />
+                );
+            })()}
+            <div
+                ref={containerRef}
+                onMouseDown={handleBackgroundMouseDown}
+                onTouchStart={handleBackgroundMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onTouchMove={handleMouseMove}
+                onTouchEnd={handleMouseUp}
+                className={`w-full h-full relative bg-transparent touch-none overscroll-none ${draggingId ? 'cursor-grabbing' : 'cursor-default'}`}
+                style={{ touchAction: 'none' }}
+            >
+                {/* Snow Ground Tessellation Layer */}
+                {weather === 'snow' && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: `${horizonPos}vh`,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            pointerEvents: 'none',
+                            zIndex: 0,
+                            opacity: 0.6,
+                            backgroundImage: `
+                                radial-gradient(rgb(214 214 214 / 80%) 0%, rgb(255 255 255 / 0%) 40%), 
+                                radial-gradient(rgb(235 235 235 / 70%) 0%, rgb(255 255 255 / 0%) 30%), 
+                                radial-gradient(rgb(235 235 235 / 60%) 0%, rgba(255, 255, 255, 0) 50%)
+                            `,
+                            backgroundSize: '150px 100px, 100px 70px, 200px 150px',
+                            backgroundPosition: '0 0, 40px 30px, 100px 80px',
+                            backgroundRepeat: 'repeat'
+                        }}
+                    />
+                )}
+
+                {items.map(item => {
+                    const isTutorialTarget = tutorialStep === 3 && item.id === tutorialItemId;
+                    const isHighlighted = highlightedId === item.id || isTutorialTarget;
+                    const isSelected = selectedIds.includes(item.id);
+
+                    // Compute shadow offset based on sun position
+                    const sunItem = items.find(i => i.type === 'sun');
+                    const sunX = sunItem ? sunItem.x : window.innerWidth / 2;
+                    const shadowSkew = Math.max(-60, Math.min(60, (item.x - sunX) * 0.1));
+                    const isGroundItem = ['pond', 'river_h', 'river_v', 'dirt_path_h', 'dirt_path_v', 'stone_path_h', 'stone_path_v', 'garden', 'sun', 'grass', 'grass_two'].includes(item.type);
+
+                    let currentFilter = isHighlighted ? 'drop-shadow(0 0 15px rgba(255, 234, 167, 0.8)) brightness(1.1)' :
+                        (isSelected ? 'drop-shadow(0 0 10px rgba(0, 184, 148, 0.9)) brightness(1.1)' : 'none');
+
+                    // Fallback normal drop shadow if no sun is present
+                    if (!sunItem && !isGroundItem) {
+                        if (currentFilter === 'none') {
+                            currentFilter = 'drop-shadow(0px 10px 5px rgba(0, 0, 0, 0.25))';
+                        } else {
+                            currentFilter += ' drop-shadow(0px 10px 5px rgba(0, 0, 0, 0.25))';
+                        }
+                    }
+
+                    return (
+                        <div
+                            key={item.id}
+                            style={{
+                                position: 'absolute',
+                                left: item.x,
+                                top: item.y,
+                                transition: (item.npc?.action === 'walking' && draggingId !== item.id && !selectedIds.includes(item.id))
+                                    ? 'left 0.05s linear, top 0.05s linear, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                                    : 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                transform: `
                                 scale(${draggingId === item.id ? 1.1 : (isHighlighted ? 1.5 : 1)}) 
                                 translate(0, 0)
                                 rotate(${item.data?.transform?.rotate || 0}deg)
                                 scale(${item.data?.transform?.scaleX || 1}, ${item.data?.transform?.scaleY || 1})
                                 skew(${item.data?.transform?.skewX || 0}deg, ${item.data?.transform?.skewY || 0}deg)
                             `,
-                        zIndex: isHighlighted ? 20000 : (item.type === 'doll' ? 10000 + Math.floor(item.y) : (item.type.startsWith('grass') ? 9000 + Math.floor(item.y) : (item.type.startsWith('house') ? 10 : (item.type.includes('tree') ? 20 : 30 + Math.floor(item.y))))),
-                        cursor: 'grab', // Always allow grab, even if selected
-                        filter: isHighlighted ? 'drop-shadow(0 0 15px rgba(255, 234, 167, 0.8)) brightness(1.1)' :
-                            (isSelected ? 'drop-shadow(0 0 10px rgba(0, 184, 148, 0.9)) brightness(1.1)' : 'none'),
-                        border: isSelected ? '2px dashed #00b894' : 'none', // Show border if selected ALWAYS
-                        borderRadius: '10px',
-                        touchAction: 'none' // Prevent scrolling while dragging
-                    }}
-                    onMouseDown={(e) => handleMouseDown(e, item.id, item.x, item.y)}
-                    onTouchStart={(e) => handleMouseDown(e, item.id, item.x, item.y)}
-                    onTouchEnd={(e) => {
-                        // Mobile Tap Detection (Robust)
-                        // We use the Ref data because State might not be updated yet for fast taps
-                        const validId = interactionData.current.itemId === item.id || draggingId === item.id;
+                                zIndex: isTutorialTarget ? 10000009 : (isHighlighted ? 20000 : (item.type === 'doll' ? 10000 + Math.floor(item.y) : (item.type.startsWith('grass') ? 9000 + Math.floor(item.y) : (item.type.startsWith('house') ? 10 : (item.type.includes('tree') ? 20 : 30 + Math.floor(item.y)))))),
+                                cursor: 'grab', // Always allow grab, even if selected
+                                border: isSelected ? '2px dashed #00b894' : 'none', // Show border if selected ALWAYS
+                                borderRadius: '10px',
+                                touchAction: 'none' // Prevent scrolling while dragging
+                            }}
+                            onMouseDown={(e) => handleMouseDown(e, item.id, item.x, item.y)}
+                            onTouchStart={(e) => handleMouseDown(e, item.id, item.x, item.y)}
+                            onTouchEnd={(e) => {
+                                // Mobile Tap Detection (Robust)
+                                // We use the Ref data because State might not be updated yet for fast taps
+                                const validId = interactionData.current.itemId === item.id || draggingId === item.id;
 
-                        if (validId) {
-                            const touch = e.changedTouches?.[0];
-                            if (touch) {
-                                // Use ref start pos if available, else state
-                                const startX = interactionData.current.itemId === item.id ? interactionData.current.startX : dragStartPos.x;
-                                const startY = interactionData.current.itemId === item.id ? interactionData.current.startY : dragStartPos.y;
+                                if (validId) {
+                                    const touch = e.changedTouches?.[0];
+                                    if (touch) {
+                                        // Use ref start pos if available, else state
+                                        const startX = interactionData.current.itemId === item.id ? interactionData.current.startX : dragStartPos.x;
+                                        const startY = interactionData.current.itemId === item.id ? interactionData.current.startY : dragStartPos.y;
 
-                                const dist = Math.hypot(touch.clientX - startX, touch.clientY - startY);
+                                        const dist = Math.hypot(touch.clientX - startX, touch.clientY - startY);
 
-                                if (dist < 30) { // Increased threshold for mobile (30px)
-                                    e.preventDefault(); // Prevent ghost clicks
-                                    onEditItem && onEditItem(item);
+                                        if (dist < 30) { // Increased threshold for mobile (30px)
+                                            e.preventDefault(); // Prevent ghost clicks
+                                            onEditItem && onEditItem(item);
+                                        }
+                                    }
+                                    setDraggingId(null);
+                                    interactionData.current.itemId = null;
                                 }
-                            }
-                            setDraggingId(null);
-                            interactionData.current.itemId = null;
-                        }
-                    }}
-                >
-                    {item.type !== 'doll' && getAsset(item.type, item.data)}
+                            }}
+                        >
+                            {/* Genuine Ground Shadow Layer - Only if Sun exists */}
+                            {!isGroundItem && sunItem && (
+                                <div style={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    transformOrigin: 'bottom center',
+                                    transform: `skewX(${shadowSkew}deg) scaleY(-0.4) translate(0px, 0px)`,
+                                    filter: 'brightness(0) blur(4px) opacity(0.25)',
+                                    zIndex: -1,
+                                    pointerEvents: 'none'
+                                }}>
+                                    {item.type !== 'doll' ? getAsset(item.type, item.data) : (
+                                        <Doll
+                                            {...item.data}
+                                            isAnimating={item.npc?.action === 'walking'}
+                                            animationType={item.npc?.action === 'talking' ? 'talking' : (item.data.animationType || 'idle')}
+                                        />
+                                    )}
+                                </div>
+                            )}
 
-                    {item.type === 'doll' && (
-                        <div style={{ pointerEvents: 'none' }}>
-                            <Doll
-                                {...item.data}
-                                isAnimating={item.npc?.action === 'walking'}
-                                animationType={item.npc?.action === 'talking' ? 'talking' : (item.data.animationType || 'idle')}
-                            />
-                            {item.data.name && (
-                                <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-white/80 px-2 rounded-[10px] text-[10px] whitespace-nowrap opacity-80 text-black">
-                                    {item.data.name}
-                                </div>
-                            )}
-                            {item.npc?.action === 'talking' && (
-                                <div className="animate-pop absolute -top-[60px] left-1/2 -translate-x-1/2 bg-white px-3 py-2 rounded-xl shadow-lg z-[100] w-[140px] text-center pointer-events-none">
-                                    <div className="text-[10px] text-gray-500 mb-0.5">Sharing a story...</div>
-                                    <div className="text-[11px] italic text-gray-900">
-                                        "{item.data.story?.slice(0, 40) || "Hello!"}..."
+                            {/* Main Asset Layer */}
+                            <div style={{ position: 'relative', zIndex: 1, filter: currentFilter }}>
+                                {item.type !== 'doll' && getAsset(item.type, item.data)}
+
+                                {isTutorialTarget && (
+                                    <div className="animate-pop absolute -top-[80px] left-1/2 -translate-x-1/2 bg-rose-500 text-white p-4 rounded-xl shadow-[0_10px_40px_rgba(225,29,72,0.6)] z-[10000010] min-w-[200px] text-center pointer-events-none ring-4 ring-rose-300">
+                                        <h3 className="font-bold text-sm mb-1 leading-tight">👆 Tap to customize!</h3>
+                                        <p className="text-xs opacity-90 leading-tight">You can change colors, adjust size, and more.</p>
+                                        <div className="absolute -bottom-3 left-1/2 -ml-3 w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[12px] border-t-rose-500" />
                                     </div>
-                                    <div className="absolute -bottom-1.5 left-1/2 -ml-1.5 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-white" />
-                                </div>
-                            )}
+                                )}
+
+                                {item.type === 'doll' && (
+                                    <div style={{ pointerEvents: 'none' }}>
+                                        <Doll
+                                            {...item.data}
+                                            isAnimating={item.npc?.action === 'walking'}
+                                            animationType={item.npc?.action === 'talking' ? 'talking' : (item.data.animationType || 'idle')}
+                                        />
+                                        {item.data.name && (
+                                            <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-white/80 px-2 rounded-[10px] text-[10px] whitespace-nowrap opacity-80 text-black">
+                                                {item.data.name}
+                                            </div>
+                                        )}
+                                        {(item.npc?.action === 'talking' || item.npc?.action === 'thinking') && (
+                                            <div className="animate-pop absolute -top-[60px] left-1/2 -translate-x-1/2 bg-white px-3 py-2 rounded-xl shadow-lg z-[100] w-[140px] text-center pointer-events-none text-black">
+                                                <div className="text-[10px] text-gray-500 mb-0.5">
+                                                    {item.npc.action === 'thinking' ? "Thinking..." : "Sharing a story..."}
+                                                </div>
+                                                <div className="text-[11px] italic text-gray-900">
+                                                    "{item.npc.action === 'thinking' ? item.npc.thought : (item.data.story?.slice(0, 40) || "Hello!")}..."
+                                                </div>
+                                                <div className="absolute -bottom-1.5 left-1/2 -ml-1.5 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-white" />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    )}
-                </div>
-            );
-        })}
-        </div>
+                    );
+                })}
+            </div>
+        </>
     );
 }

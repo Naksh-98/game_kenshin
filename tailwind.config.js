@@ -15,11 +15,22 @@ module.exports = {
             animation: {
                 'spin-slow': 'spin 3s linear infinite',
                 'pop': 'pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                'bounce-subtle': 'bounce-subtle 2s infinite',
             },
             keyframes: {
                 pop: {
                     '0%': { transform: 'scale(0)' },
                     '100%': { transform: 'scale(1)' },
+                },
+                'bounce-subtle': {
+                    '0%, 100%': {
+                        transform: 'translateY(-5%)',
+                        animationTimingFunction: 'cubic-bezier(0.8, 0, 1, 1)',
+                    },
+                    '50%': {
+                        transform: 'translateY(0)',
+                        animationTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
+                    },
                 }
             }
         },

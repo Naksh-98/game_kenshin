@@ -178,6 +178,33 @@ export const NatureShapes = {
             <div style={{ width: '60px', height: '60px', background: '#fbc531', borderRadius: '50%' }}></div>
         </div>
     ),
+    Snowman: ({ color = '#ffffff' }) => (
+        <div style={{ width: '40px', height: '60px', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {/* Top ball */}
+            <div style={{ width: '25px', height: '25px', backgroundColor: color, borderRadius: '50%', position: 'relative', zIndex: 2, boxShadow: 'inset -3px -3px rgba(0,0,0,0.1)' }}>
+                {/* Eyes */}
+                <div style={{ width: '3px', height: '3px', backgroundColor: 'black', borderRadius: '50%', position: 'absolute', top: '8px', left: '7px' }}></div>
+                <div style={{ width: '3px', height: '3px', backgroundColor: 'black', borderRadius: '50%', position: 'absolute', top: '8px', right: '7px' }}></div>
+                {/* Nose */}
+                <div style={{ width: '0', height: '0', borderTop: '2px solid transparent', borderBottom: '2px solid transparent', borderLeft: '6px solid orange', position: 'absolute', top: '12px', left: '10px' }}></div>
+            </div>
+            {/* Bottom ball */}
+            <div style={{ width: '40px', height: '40px', backgroundColor: color, borderRadius: '50%', marginTop: '-10px', zIndex: 1, boxShadow: 'inset -5px -5px rgba(0,0,0,0.1)' }}>
+                {/* Buttons */}
+                <div style={{ width: '4px', height: '4px', backgroundColor: '#2d3436', borderRadius: '50%', position: 'absolute', bottom: '25px', left: '18px' }}></div>
+                <div style={{ width: '4px', height: '4px', backgroundColor: '#2d3436', borderRadius: '50%', position: 'absolute', bottom: '15px', left: '18px' }}></div>
+            </div>
+            {/* Arms */}
+            <div style={{ width: '20px', height: '2px', backgroundColor: '#834c32', position: 'absolute', top: '30px', left: '-10px', transform: 'rotate(-20deg)', zIndex: 0 }}></div>
+            <div style={{ width: '20px', height: '2px', backgroundColor: '#834c32', position: 'absolute', top: '30px', right: '-10px', transform: 'rotate(20deg)', zIndex: 0 }}></div>
+        </div>
+    ),
+    Snowball: ({ color = '#ffffff' }) => (
+        <div style={{
+            width: '20px', height: '20px', backgroundColor: color, borderRadius: '50%',
+            boxShadow: 'inset -3px -3px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.1)'
+        }}></div>
+    ),
     Cactus: () => (
         <div style={{ width: '40px', height: '60px', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div style={{ width: '20px', height: '50px', backgroundColor: '#55efc4', borderRadius: '10px', boxShadow: 'inset -3px 0 rgba(0,0,0,0.1)' }}></div>
@@ -280,6 +307,13 @@ export const FloorShapes = {
         <div style={{ width: '120px', height: '100px', background: '#0984e3', opacity: 0.8, borderRadius: '50%', border: '4px solid #74b9ff', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)' }} >
             <div style={{ position: 'absolute', top: '20px', left: '30px', width: '20px', height: '10px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px' }}></div>
         </div>
+    ),
+    SnowGround: () => (
+        <div style={{
+            width: '120px', height: '80px', background: 'radial-gradient(ellipse at center, #ffffff 0%, #e0eaf5 100%)',
+            borderRadius: '50% 50% 40% 60%', opacity: 0.9, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+            borderBottom: '4px solid #ced6e0', borderLeft: '2px solid #ced6e0'
+        }} />
     ),
     DirtPathHorizontal: () => (
         <div style={{ width: '100px', height: '40px', background: '#e1b12c', opacity: 0.8, borderRadius: '5px', border: 'none' }} />
@@ -395,6 +429,8 @@ export const getAsset = (type, data = {}) => {
     );
     if (type === 'rock') return <NatureShapes.Rock />;
     if (type === 'sun') return <NatureShapes.Sun />;
+    if (type === 'snowman') return <NatureShapes.Snowman {...data} />;
+    if (type === 'snow_ball') return <NatureShapes.Snowball {...data} />;
 
     // Flowers
     if (type === 'flower_rose') return <NatureShapes.Flower type="rose" />;
@@ -405,6 +441,7 @@ export const getAsset = (type, data = {}) => {
     if (type === 'river_h') return <FloorShapes.RiverHorizontal />;
     if (type === 'river_v') return <FloorShapes.RiverVertical />;
     if (type === 'pond') return <FloorShapes.Pond />;
+    if (type === 'snow_ground') return <FloorShapes.SnowGround />;
     if (type === 'dirt_path_h') return <FloorShapes.DirtPathHorizontal />;
     if (type === 'dirt_path_v') return <FloorShapes.DirtPathVertical />;
     if (type === 'stone_path_h') return <FloorShapes.StonePathHorizontal />;
